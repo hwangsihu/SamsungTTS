@@ -8,7 +8,8 @@ import java.util.Locale
 enum class Engine { CLASSIC, HD }
 
 sealed interface VoiceSource {
-    data class Asset(val dir: String) : VoiceSource
+    // Files missing from dir come from sharedDir (SM-P600 voices reuse the Note 2 models).
+    data class Asset(val dir: String, val sharedDir: String? = null) : VoiceSource
     data class Pack(val packageName: String, val sourceDir: String, val nativeLibraryDir: String) : VoiceSource
 }
 
@@ -19,6 +20,7 @@ data class SmtVoice(
     val label: String,
     val engine: Engine,
     val source: VoiceSource,
+    val device: String? = null,
 )
 
 class VoiceRepository(private val context: Context) {
@@ -64,11 +66,13 @@ class VoiceRepository(private val context: Context) {
     private fun key(iso3Language: String?) = "default_$iso3Language"
 
     private fun embedded(): List<SmtVoice> = context.assets.list(ASSET_ROOT).orEmpty().flatMap { device ->
+        val info = DEVICES[device] ?: Device(device)
         context.assets.list("$ASSET_ROOT/$device").orEmpty().mapNotNull { dir ->
             parse(dir)?.let { (locale, variant) ->
                 SmtVoice(
-                    name(locale, variant), locale, variant, "${DEVICES[device] ?: device} $variant",
-                    Engine.CLASSIC, VoiceSource.Asset("$ASSET_ROOT/$device/$dir"),
+                    name(locale, variant) + info.nameSuffix, locale, variant, "${info.label} $variant", Engine.CLASSIC,
+                    VoiceSource.Asset("$ASSET_ROOT/$device/$dir", info.sharesWith?.let { "$ASSET_ROOT/$it/$dir" }),
+                    device,
                 )
             }
         }
@@ -97,12 +101,19 @@ class VoiceRepository(private val context: Context) {
             }
     }
 
+    private data class Device(val label: String, val nameSuffix: String = "", val sharesWith: String? = null)
+
     companion object {
         const val ACTION_CHECK_VOICE_DATA = "com.samsung.SMT.action.CHECK_VOICE_DATA"
+        const val DEVICE_P600 = "p600"
         private const val ALIAS_SUFFIX = "-default"
         private const val PACK_PREFIX = "com.samsung.SMT.lang_"
         private const val ASSET_ROOT = "voices"
-        private val DEVICES = mapOf("note2" to "Note 2", "note8" to "Note 8")
+        private val DEVICES = mapOf(
+            "note2" to Device("Note 2"),
+            "note8" to Device("Note 8"),
+            DEVICE_P600 to Device("Note 10.1 2014", nameSuffix = "-p600", sharesWith = "note2"),
+        )
         private val ID = Regex("^([a-z]{2})_([a-zA-Z]{2})_([a-zA-Z][0-9]{2})$")
 
         fun aliasOf(locale: Locale) = "${locale.language}$ALIAS_SUFFIX"
