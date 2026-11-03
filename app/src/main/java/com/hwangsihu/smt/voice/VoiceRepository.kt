@@ -25,9 +25,25 @@ class VoiceRepository(private val context: Context) {
 
     private val prefs = context.getSharedPreferences("voices", Context.MODE_PRIVATE)
 
-    fun voices(): List<SmtVoice> = (embedded() + packs()).distinctBy { it.name }
+    @Volatile
+    private var cache: List<SmtVoice>? = null
 
-    fun find(name: String?): SmtVoice? = voices().firstOrNull { it.name == name }
+    fun voices(): List<SmtVoice> = cache ?: (embedded() + packs()).distinctBy { it.name }.also { cache = it }
+
+    fun invalidate() {
+        cache = null
+    }
+
+    // Clients that only pick a language get the alias, so they follow later changes of the default.
+    fun resolve(name: String?): SmtVoice? = when {
+        name == null -> null
+        name.endsWith(ALIAS_SUFFIX) -> voices().firstOrNull { aliasOf(it.locale) == name }
+            ?.let { defaultVoice(it.locale.isO3Language, null) }
+        else -> voices().firstOrNull { it.name == name }
+    }
+
+    fun aliases(): List<Pair<String, Locale>> = voices().map { it.locale.language }.distinct()
+        .map { language -> aliasOf(Locale.forLanguageTag(language)) to Locale.forLanguageTag(language) }
 
     fun defaultVoice(iso3Language: String?, iso3Country: String?): SmtVoice? {
         val sameLanguage = voices().filter { it.locale.isO3Language == iso3Language }
@@ -67,6 +83,7 @@ class VoiceRepository(private val context: Context) {
             .mapNotNull { packageName ->
                 val app = pm.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
                 val meta = app.metaData ?: return@mapNotNull null
+                if (meta.getString("voice.data.type") == "neural") return@mapNotNull null
                 val engine = when {
                     meta.getBoolean("voice.data.provider.x") -> Engine.HD
                     meta.getBoolean("voice.data.provider") -> Engine.CLASSIC
@@ -82,10 +99,13 @@ class VoiceRepository(private val context: Context) {
 
     companion object {
         const val ACTION_CHECK_VOICE_DATA = "com.samsung.SMT.action.CHECK_VOICE_DATA"
+        private const val ALIAS_SUFFIX = "-default"
         private const val PACK_PREFIX = "com.samsung.SMT.lang_"
         private const val ASSET_ROOT = "voices"
         private val DEVICES = mapOf("note2" to "Note 2", "note8" to "Note 8")
         private val ID = Regex("^([a-z]{2})_([a-zA-Z]{2})_([a-zA-Z][0-9]{2})$")
+
+        fun aliasOf(locale: Locale) = "${locale.language}$ALIAS_SUFFIX"
 
         private fun parse(id: String): Pair<Locale, String>? = ID.matchEntire(id)?.destructured?.let { (language, country, variant) ->
             Locale.Builder().setLanguage(language).setRegion(country.uppercase(Locale.ROOT)).build() to variant

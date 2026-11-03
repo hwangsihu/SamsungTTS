@@ -1,5 +1,9 @@
 package com.hwangsihu.smt
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioFormat
 import android.speech.tts.SynthesisCallback
 import android.speech.tts.SynthesisRequest
@@ -7,6 +11,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeechService
 import android.speech.tts.Voice
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.hwangsihu.smt.engine.Synthesizer
 import com.hwangsihu.smt.voice.Engine
 import com.hwangsihu.smt.voice.SmtVoice
@@ -22,12 +27,24 @@ class SmtTtsService : TextToSpeechService() {
     private var active: Synthesizer? = null
     private var language = arrayOf("kor", "KOR", "")
 
+    private val packageChanges = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = repository.invalidate()
+    }
+
     override fun onCreate() {
         repository = VoiceRepository(this)
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addDataScheme("package")
+        }
+        ContextCompat.registerReceiver(this, packageChanges, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         super.onCreate()
     }
 
     override fun onDestroy() {
+        unregisterReceiver(packageChanges)
         loaded?.second?.release()
         loaded = null
         super.onDestroy()
@@ -52,22 +69,25 @@ class SmtTtsService : TextToSpeechService() {
         return result
     }
 
-    override fun onGetVoices(): List<Voice> = repository.voices().map { it.toVoice() }
+    override fun onGetVoices(): List<Voice> =
+        repository.voices().map { it.toVoice() } + repository.aliases().map { (name, locale) ->
+            Voice(name, locale, Voice.QUALITY_NORMAL, Voice.LATENCY_NORMAL, false, emptySet())
+        }
 
     override fun onIsValidVoiceName(voiceName: String?): Int =
-        if (repository.find(voiceName) != null) TextToSpeech.SUCCESS else TextToSpeech.ERROR
+        if (repository.resolve(voiceName) != null) TextToSpeech.SUCCESS else TextToSpeech.ERROR
 
     override fun onLoadVoice(voiceName: String?): Int = onIsValidVoiceName(voiceName)
 
     override fun onGetDefaultVoiceNameFor(lang: String?, country: String?, variant: String?): String? =
-        repository.defaultVoice(lang, country)?.name
+        repository.defaultVoice(lang, country)?.let { VoiceRepository.aliasOf(it.locale) }
 
     override fun onStop() {
         active?.stop()
     }
 
     override fun onSynthesizeText(request: SynthesisRequest, callback: SynthesisCallback) {
-        val voice = repository.find(request.voiceName) ?: repository.defaultVoice(request.language, request.country)
+        val voice = repository.resolve(request.voiceName) ?: repository.defaultVoice(request.language, request.country)
         if (voice == null) {
             callback.error(TextToSpeech.ERROR_INVALID_REQUEST)
             return
