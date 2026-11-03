@@ -76,9 +76,9 @@ public final class SmtTTS {
     }
 
     @SuppressWarnings("unused")
-    private void AudioCallback(int instanceId, byte[] buffer, int offset, int length, String info, int result) {
+    private void AudioCallback(int instanceId, byte[] pcm, int textOffset, int textLength, String text, int result) {
         AudioSink s = sink;
-        if (s != null && length > 0 && !s.onAudio(buffer, offset, length)) {
+        if (s != null && pcm != null && pcm.length > 0 && !s.onAudio(pcm, 0, pcm.length)) {
             sink = null;
         }
     }
