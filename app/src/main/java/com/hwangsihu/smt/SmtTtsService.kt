@@ -12,7 +12,9 @@ import android.speech.tts.TextToSpeechService
 import android.speech.tts.Voice
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.hwangsihu.smt.engine.AudioSink
 import com.hwangsihu.smt.engine.Synthesizer
+import com.hwangsihu.smt.engine.skippingLeadIn
 import com.hwangsihu.smt.voice.Engine
 import com.hwangsihu.smt.voice.SmtVoice
 import com.hwangsihu.smt.voice.VoiceRepository
@@ -101,16 +103,18 @@ class SmtTtsService : TextToSpeechService() {
         }
         callback.start(synthesizer.sampleRate, AudioFormat.ENCODING_PCM_16BIT, 1)
         val maxChunk = callback.maxBufferSize
-        active = synthesizer
-        val ok = synthesizer.synthesize(request.charSequenceText.toString(), request.speechRate, request.pitch) { buffer, offset, length ->
+        val sink: AudioSink = sink@{ buffer, offset, length ->
             var position = offset
             while (position < offset + length) {
                 val size = min(maxChunk, offset + length - position)
-                if (callback.audioAvailable(buffer, position, size) != TextToSpeech.SUCCESS) return@synthesize false
+                if (callback.audioAvailable(buffer, position, size) != TextToSpeech.SUCCESS) return@sink false
                 position += size
             }
             true
         }
+        active = synthesizer
+        val text = request.charSequenceText.toString()
+        val ok = synthesizer.synthesize(text, request.speechRate, request.pitch, sink.skippingLeadIn())
         active = null
         if (ok) callback.done() else callback.error(TextToSpeech.ERROR_SYNTHESIS)
     }

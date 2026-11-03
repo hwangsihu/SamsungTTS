@@ -15,8 +15,29 @@ import java.io.File
 import java.io.InputStream
 import java.util.Locale
 import java.util.zip.ZipFile
+import kotlin.math.abs
 
 typealias AudioSink = (buffer: ByteArray, offset: Int, length: Int) -> Boolean
+
+// Drops everything before the first audible sample (|s| > 30, about -60 dBFS): 60-90 ms of near silence
+// from the HMM engines, and the 600 ms of zeros the HD engine carries over from the previous utterance.
+fun AudioSink.skippingLeadIn(): AudioSink {
+    var sounding = false
+    return { buffer, offset, length ->
+        val end = offset + length
+        var start = offset
+        if (!sounding) {
+            while (start + 1 < end && abs(sampleAt(buffer, start)) <= LEAD_IN_LEVEL) start += 2
+            sounding = start + 1 < end
+        }
+        !sounding || this(buffer, start, end - start)
+    }
+}
+
+private const val LEAD_IN_LEVEL = 30
+
+private fun sampleAt(buffer: ByteArray, index: Int): Int =
+    ((buffer[index].toInt() and 0xff) or (buffer[index + 1].toInt() shl 8)).toShort().toInt()
 
 interface Synthesizer {
     val sampleRate: Int
@@ -251,21 +272,16 @@ class HdSynthesizer private constructor(private val tts: PowerTTS) : Synthesizer
 }
 
 // Reads 160-byte frames while the engine returns 0 (more audio) or a code keepGoing accepts.
-// Frames of pure zeros before the first sound are dropped: the HD engine keeps the 600 ms pause
-// after an utterance and puts it in front of the next one, which delays every TalkBack reading.
 private fun pump(sink: AudioSink, read: (ByteArray) -> Int, stopped: () -> Boolean, keepGoing: (Int) -> Boolean): Boolean {
     val frame = ByteArray(PowerTTS.BUFFER_SIZE)
     val chunk = ByteArray(PowerTTS.BUFFER_SIZE * 32)
     var filled = 0
-    var sounding = false
     while (!stopped()) {
         val code = read(frame)
         if (code != 0) {
             if (keepGoing(code)) continue
             break
         }
-        if (!sounding && frame.all { it == ZERO }) continue
-        sounding = true
         frame.copyInto(chunk, filled)
         filled += frame.size
         if (filled == chunk.size) {
@@ -276,5 +292,3 @@ private fun pump(sink: AudioSink, read: (ByteArray) -> Int, stopped: () -> Boole
     if (filled > 0 && !stopped()) sink(chunk, 0, filled)
     return true
 }
-
-private const val ZERO: Byte = 0
