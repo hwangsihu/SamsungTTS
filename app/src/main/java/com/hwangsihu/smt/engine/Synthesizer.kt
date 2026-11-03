@@ -251,16 +251,21 @@ class HdSynthesizer private constructor(private val tts: PowerTTS) : Synthesizer
 }
 
 // Reads 160-byte frames while the engine returns 0 (more audio) or a code keepGoing accepts.
+// Frames of pure zeros before the first sound are dropped: the HD engine keeps the 600 ms pause
+// after an utterance and puts it in front of the next one, which delays every TalkBack reading.
 private fun pump(sink: AudioSink, read: (ByteArray) -> Int, stopped: () -> Boolean, keepGoing: (Int) -> Boolean): Boolean {
     val frame = ByteArray(PowerTTS.BUFFER_SIZE)
     val chunk = ByteArray(PowerTTS.BUFFER_SIZE * 32)
     var filled = 0
+    var sounding = false
     while (!stopped()) {
         val code = read(frame)
         if (code != 0) {
             if (keepGoing(code)) continue
             break
         }
+        if (!sounding && frame.all { it == ZERO }) continue
+        sounding = true
         frame.copyInto(chunk, filled)
         filled += frame.size
         if (filled == chunk.size) {
@@ -271,3 +276,5 @@ private fun pump(sink: AudioSink, read: (ByteArray) -> Int, stopped: () -> Boole
     if (filled > 0 && !stopped()) sink(chunk, 0, filled)
     return true
 }
+
+private const val ZERO: Byte = 0
