@@ -154,16 +154,29 @@ class ClassicSynthesizer private constructor(private val tts: SmtTTS, private va
         // The 3.5 engine speaks 2014 data about twice as fast; this brings it back to the Note 2 tempo.
         private const val NOTE2_RATE_SCALE = 46
 
+        // Half-precision math makes the neural voices about twice as fast and changes their sound only slightly.
+        // Samsung turns it on for the Galaxy A14 alone; here it is on wherever the CPU has it, which needs a
+        // 64-bit process.
+        private val halfPrecision: Boolean by lazy {
+            Process.is64Bit() && runCatching {
+                File("/proc/cpuinfo").useLines { lines ->
+                    lines.any { it.startsWith("Features") && "asimdhp" in it.substringAfter(':').trim().split(' ') }
+                }
+            }.getOrDefault(false)
+        }
+
         fun load(files: VoiceFiles, voice: SmtVoice): ClassicSynthesizer {
             val rateScale = if (files.isNote2Format()) NOTE2_RATE_SCALE else 100
-            val ttsType = if (voice.engine == Engine.NEURAL) SmtTTS.TTS_TYPE_NEURAL else SmtTTS.TTS_TYPE_HMM
+            val neural = voice.engine == Engine.NEURAL
+            val ttsType = if (neural) SmtTTS.TTS_TYPE_NEURAL else SmtTTS.TTS_TYPE_HMM
+            val features = if (neural && halfPrecision) SmtTTS.FEATURE_FP16 else 0
             val tts = SmtTTS(0)
             check(tts.isValid) { "initialize failed" }
             try {
                 check(tts.loadEngine(ENGINE) == 0) { "loadEngine($ENGINE) failed" }
                 val result = tts.setLanguageWithFD(
                     files.describe(), voice.locale.isO3Language, voice.locale.isO3Country,
-                    voice.variant.take(1), voice.variant.drop(1).toInt(), ttsType, 0,
+                    voice.variant.take(1), voice.variant.drop(1).toInt(), ttsType, features,
                 )
                 check(result == 0) { "setLanguageWithFD(${voice.name}) = $result" }
             } catch (e: Exception) {
