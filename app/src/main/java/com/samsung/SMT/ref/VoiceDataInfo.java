@@ -47,6 +47,10 @@ public class VoiceDataInfo {
         return eType;
     }
 
+    public long getLength() {
+        return length;
+    }
+
     public static eFileType parseFileType(String path) {
         String name = new File(path).getName().toLowerCase(Locale.ROOT);
         for (eFileType t : new eFileType[]{eFileType.DT, eFileType.QS, eFileType.AM, eFileType.CART, eFileType.PB}) {

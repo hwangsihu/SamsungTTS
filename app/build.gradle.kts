@@ -8,6 +8,7 @@ android {
     compileSdk {
         version = release(37)
     }
+    ndkVersion = "30.0.16248370"
 
     defaultConfig {
         applicationId = "com.hwangsihu.smt"
@@ -37,7 +38,12 @@ android {
         compose = true
     }
     androidResources {
-        noCompress += listOf("lng", "am", "cfg", "dt", "qs")
+        noCompress += listOf("lng", "am", "cfg", "dt", "qs", "cart", "pb")
+    }
+    externalNativeBuild {
+        ndkBuild {
+            path = file("src/main/cpp/Android.mk")
+        }
     }
     packaging {
         jniLibs {

@@ -64,11 +64,8 @@ class MainActivity : ComponentActivity() {
     private fun speak(voice: SmtVoice, text: String) {
         val engine = tts ?: return
         engine.voices?.firstOrNull { it.name == voice.name }?.let { engine.voice = it }
-        engine.speak(text.ifBlank { sampleText(voice) }, TextToSpeech.QUEUE_FLUSH, null, voice.name)
+        engine.speak(text.ifBlank { SampleText.forLanguage(voice.locale.isO3Language) }, TextToSpeech.QUEUE_FLUSH, null, voice.name)
     }
-
-    private fun sampleText(voice: SmtVoice) =
-        getString(if (voice.locale.language == "ko") R.string.sample_ko else R.string.sample_en)
 }
 
 @Composable

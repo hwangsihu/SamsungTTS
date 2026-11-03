@@ -23,7 +23,7 @@ class CheckVoiceDataActivity : Activity() {
 class GetSampleTextActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val text = getString(if (intent.getStringExtra("language") == "kor") R.string.sample_ko else R.string.sample_en)
+        val text = SampleText.forLanguage(intent.getStringExtra("language"))
         setResult(TextToSpeech.LANG_AVAILABLE, Intent().putExtra(TextToSpeech.Engine.EXTRA_SAMPLE_TEXT, text))
         finish()
     }

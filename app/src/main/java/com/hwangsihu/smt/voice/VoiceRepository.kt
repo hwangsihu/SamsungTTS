@@ -9,7 +9,7 @@ enum class Engine { CLASSIC, HD }
 
 sealed interface VoiceSource {
     data class Asset(val dir: String) : VoiceSource
-    data class Pack(val packageName: String, val nativeLibraryDir: String) : VoiceSource
+    data class Pack(val packageName: String, val sourceDir: String, val nativeLibraryDir: String) : VoiceSource
 }
 
 data class SmtVoice(
@@ -47,9 +47,14 @@ class VoiceRepository(private val context: Context) {
 
     private fun key(iso3Language: String?) = "default_$iso3Language"
 
-    private fun embedded(): List<SmtVoice> = context.assets.list(ASSET_ROOT).orEmpty().mapNotNull { dir ->
-        parse(dir)?.let { (locale, variant) ->
-            SmtVoice(name(locale, variant), locale, variant, "Note 8 $variant", Engine.CLASSIC, VoiceSource.Asset("$ASSET_ROOT/$dir"))
+    private fun embedded(): List<SmtVoice> = context.assets.list(ASSET_ROOT).orEmpty().flatMap { device ->
+        context.assets.list("$ASSET_ROOT/$device").orEmpty().mapNotNull { dir ->
+            parse(dir)?.let { (locale, variant) ->
+                SmtVoice(
+                    name(locale, variant), locale, variant, "${DEVICES[device] ?: device} $variant",
+                    Engine.CLASSIC, VoiceSource.Asset("$ASSET_ROOT/$device/$dir"),
+                )
+            }
         }
     }
 
@@ -70,7 +75,7 @@ class VoiceRepository(private val context: Context) {
                 val (locale, variant) = parse(packageName.removePrefix(PACK_PREFIX)) ?: return@mapNotNull null
                 SmtVoice(
                     name(locale, variant), locale, variant, pm.getApplicationLabel(app).toString(), engine,
-                    VoiceSource.Pack(packageName, app.nativeLibraryDir),
+                    VoiceSource.Pack(packageName, app.sourceDir, app.nativeLibraryDir),
                 )
             }
     }
@@ -79,6 +84,7 @@ class VoiceRepository(private val context: Context) {
         const val ACTION_CHECK_VOICE_DATA = "com.samsung.SMT.action.CHECK_VOICE_DATA"
         private const val PACK_PREFIX = "com.samsung.SMT.lang_"
         private const val ASSET_ROOT = "voices"
+        private val DEVICES = mapOf("note2" to "Note 2", "note8" to "Note 8")
         private val ID = Regex("^([a-z]{2})_([a-zA-Z]{2})_([a-zA-Z][0-9]{2})$")
 
         private fun parse(id: String): Pair<Locale, String>? = ID.matchEntire(id)?.destructured?.let { (language, country, variant) ->
