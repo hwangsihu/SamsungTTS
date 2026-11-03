@@ -130,7 +130,11 @@ class SmtTtsService : TextToSpeechService() {
 
     private fun SmtVoice.toVoice() = Voice(
         name, locale,
-        if (engine == Engine.HD) Voice.QUALITY_VERY_HIGH else Voice.QUALITY_NORMAL,
+        when (engine) {
+            Engine.HD -> Voice.QUALITY_VERY_HIGH
+            Engine.NEURAL -> Voice.QUALITY_HIGH
+            Engine.CLASSIC -> Voice.QUALITY_NORMAL
+        },
         Voice.LATENCY_NORMAL, false, emptySet(),
     )
 

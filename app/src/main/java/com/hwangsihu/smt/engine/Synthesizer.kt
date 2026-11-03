@@ -2,6 +2,7 @@ package com.hwangsihu.smt.engine
 
 import android.content.Context
 import android.content.res.AssetFileDescriptor
+import android.content.res.AssetManager
 import android.os.Process
 import androidx.core.net.toUri
 import com.hwangsihu.smt.voice.Engine
@@ -74,10 +75,21 @@ class VoiceFiles(private val context: Context, private val source: VoiceSource) 
         listOfNotNull(asset.sharedDir, asset.dir).flatMap { dir -> context.assets.list(dir).orEmpty().map { it to dir } }.toMap()
     }.orEmpty()
 
+    private val apkAssets: AssetManager? = (source as? VoiceSource.Pack)?.takeIf { it.readFromApk }
+        ?.let { context.createPackageContext(it.packageName, 0).assets }
+
     val names: List<String> = when (source) {
         is VoiceSource.Asset -> assetDirs.keys.toList()
-        is VoiceSource.Pack -> context.contentResolver.query(base!!.toUri(), arrayOf("voice_data_lists"), null, null, null)
-            ?.use { it.columnNames.toList() }.orEmpty()
+        is VoiceSource.Pack -> if (source.readFromApk) {
+            ZipFile(source.sourceDir).use { zip ->
+                zip.entries().asSequence().filter { !it.isDirectory }.map { it.name }
+                    .filter { it.startsWith(APK_ASSETS) && '/' !in it.substring(APK_ASSETS.length) }
+                    .map { it.removePrefix(APK_ASSETS) }.toList()
+            }
+        } else {
+            context.contentResolver.query(base!!.toUri(), arrayOf("voice_data_lists"), null, null, null)
+                ?.use { it.columnNames.toList() }.orEmpty()
+        }
     }
 
     // 2014-era HMM voices (Note 2) ship an 852-byte config; later ones are several KB.
@@ -106,14 +118,20 @@ class VoiceFiles(private val context: Context, private val source: VoiceSource) 
 
     private fun open(name: String): AssetFileDescriptor = when (source) {
         is VoiceSource.Asset -> context.assets.openFd("${assetDirs.getValue(name)}/$name")
-        is VoiceSource.Pack -> context.contentResolver.openAssetFileDescriptor("$base/$name".toUri(), "r")
+        is VoiceSource.Pack -> apkAssets?.openFd(name)
+            ?: context.contentResolver.openAssetFileDescriptor("$base/$name".toUri(), "r")
             ?: error("cannot open $name from ${source.packageName}")
     }
 
     private fun stream(name: String): InputStream = when (source) {
         is VoiceSource.Asset -> context.assets.open("${assetDirs.getValue(name)}/$name")
-        is VoiceSource.Pack -> context.contentResolver.openInputStream("$base/$name".toUri())
+        is VoiceSource.Pack -> apkAssets?.open(name)
+            ?: context.contentResolver.openInputStream("$base/$name".toUri())
             ?: error("cannot read $name from ${source.packageName}")
+    }
+
+    private companion object {
+        const val APK_ASSETS = "assets/"
     }
 }
 
@@ -138,13 +156,14 @@ class ClassicSynthesizer private constructor(private val tts: SmtTTS, private va
 
         fun load(files: VoiceFiles, voice: SmtVoice): ClassicSynthesizer {
             val rateScale = if (files.isNote2Format()) NOTE2_RATE_SCALE else 100
+            val ttsType = if (voice.engine == Engine.NEURAL) SmtTTS.TTS_TYPE_NEURAL else SmtTTS.TTS_TYPE_HMM
             val tts = SmtTTS(0)
             check(tts.isValid) { "initialize failed" }
             try {
                 check(tts.loadEngine(ENGINE) == 0) { "loadEngine($ENGINE) failed" }
                 val result = tts.setLanguageWithFD(
                     files.describe(), voice.locale.isO3Language, voice.locale.isO3Country,
-                    voice.variant.take(1), voice.variant.drop(1).toInt(), SmtTTS.TTS_TYPE_HMM, 0,
+                    voice.variant.take(1), voice.variant.drop(1).toInt(), ttsType, 0,
                 )
                 check(result == 0) { "setLanguageWithFD(${voice.name}) = $result" }
             } catch (e: Exception) {

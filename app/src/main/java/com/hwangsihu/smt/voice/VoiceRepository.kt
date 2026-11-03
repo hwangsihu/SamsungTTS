@@ -3,14 +3,22 @@ package com.hwangsihu.smt.voice
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Bundle
 import java.util.Locale
 
-enum class Engine { CLASSIC, HD }
+enum class Engine { CLASSIC, HD, NEURAL }
 
 sealed interface VoiceSource {
     // Files missing from dir come from sharedDir (SM-P600 voices reuse the Note 2 models).
     data class Asset(val dir: String, val sharedDir: String? = null) : VoiceSource
-    data class Pack(val packageName: String, val sourceDir: String, val nativeLibraryDir: String) : VoiceSource
+    // Packs made for the 3.5 engine hand their files only to Samsung's own TTS ("Not allowed uid"), so
+    // readFromApk takes them straight from the pack's APK, where they sit uncompressed under assets/.
+    data class Pack(
+        val packageName: String,
+        val sourceDir: String,
+        val nativeLibraryDir: String,
+        val readFromApk: Boolean = false,
+    ) : VoiceSource
 }
 
 data class SmtVoice(
@@ -84,22 +92,50 @@ class VoiceRepository(private val context: Context) {
             .mapNotNull { it.providerInfo?.packageName }
             .filter { it.startsWith(PACK_PREFIX) }
             .distinct()
-            .mapNotNull { packageName ->
+            .flatMap { packageName ->
                 val app = pm.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
-                val meta = app.metaData ?: return@mapNotNull null
-                if (meta.getString("voice.data.type") == "neural") return@mapNotNull null
-                val engine = when {
-                    meta.getBoolean("voice.data.provider.x") -> Engine.HD
-                    meta.getBoolean("voice.data.provider") -> Engine.CLASSIC
-                    else -> return@mapNotNull null
+                val meta = app.metaData ?: return@flatMap emptyList()
+                val (locale, variant) = parse(packageName.removePrefix(PACK_PREFIX)) ?: return@flatMap emptyList()
+                val label = pm.getApplicationLabel(app).toString()
+                val source = VoiceSource.Pack(packageName, app.sourceDir, app.nativeLibraryDir)
+                when {
+                    meta.getBoolean("voice.data.provider.x") ->
+                        listOf(SmtVoice(name(locale, variant), locale, variant, label, Engine.HD, source))
+                    meta.getString("voice.data.type") == "neural" -> neuralVoices(meta, locale, variant, label, source)
+                    meta.getBoolean("voice.data.provider") ->
+                        listOf(SmtVoice(name(locale, variant), locale, variant, label, Engine.CLASSIC, source))
+                    else -> emptyList()
                 }
-                val (locale, variant) = parse(packageName.removePrefix(PACK_PREFIX)) ?: return@mapNotNull null
-                SmtVoice(
-                    name(locale, variant), locale, variant, pm.getApplicationLabel(app).toString(), engine,
-                    VoiceSource.Pack(packageName, app.sourceDir, app.nativeLibraryDir),
-                )
             }
     }
+
+    // A multi-speaker pack (ko_kr_r00) lists its speakers in voice.data.supported_voices, such as l05 and g01.
+    private fun neuralVoices(meta: Bundle, locale: Locale, variant: String, label: String, pack: VoiceSource.Pack): List<SmtVoice> {
+        val source = pack.copy(readFromApk = true)
+        val speakers = meta.getString("voice.data.supported_voices").orEmpty().split(':').filter { SPEAKER.matches(it) }
+        if (!meta.getBoolean("voice.data.provider.multispeaker") || speakers.isEmpty()) {
+            return listOf(SmtVoice(name(locale, variant) + NEURAL_SUFFIX, locale, variant, label, Engine.NEURAL, source))
+        }
+        val names = speakerNames(source.packageName)
+        return speakers
+            .map { id -> SmtVoice(name(locale, id) + NEURAL_SUFFIX, locale, id, "$label ${names[id] ?: id}", Engine.NEURAL, source) }
+            .sortedBy { it.label }
+    }
+
+    // The pack's cfg ends with key/value strings such as "multispeaker_0" -> "voice1:voice 1:음성1:음성 1:l05:F05:두리:0":
+    // the English and Korean display names come second and fourth, the speaker id fifth.
+    private fun speakerNames(packageName: String): Map<String, String> = runCatching {
+        val cfg = context.createPackageContext(packageName, 0).assets.open("cfg").use { it.readBytes() }
+        val nameField = if (Locale.getDefault().language == "ko") 3 else 1
+        String(cfg, Charsets.UTF_8).split('\u0000').zipWithNext()
+            .filter { (key, _) -> key.startsWith("multispeaker_") }
+            .mapNotNull { (_, value) ->
+                val fields = value.split(':')
+                val id = fields.getOrNull(4)?.substringBefore(' ') ?: return@mapNotNull null
+                fields.getOrNull(nameField)?.let { id to it }
+            }
+            .toMap()
+    }.getOrDefault(emptyMap())
 
     private data class Device(val label: String, val nameSuffix: String = "", val sharesWith: String? = null)
 
@@ -114,7 +150,9 @@ class VoiceRepository(private val context: Context) {
             "note8" to Device("Note 8"),
             DEVICE_P600 to Device("Note 10.1 2014", nameSuffix = "-p600", sharesWith = "note2"),
         )
+        private const val NEURAL_SUFFIX = "-neural"
         private val ID = Regex("^([a-z]{2})_([a-zA-Z]{2})_([a-zA-Z][0-9]{2})$")
+        private val SPEAKER = Regex("^[a-z][0-9]{2}$")
 
         fun aliasOf(locale: Locale) = "${locale.language}$ALIAS_SUFFIX"
 

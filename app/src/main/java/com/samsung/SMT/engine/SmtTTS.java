@@ -10,6 +10,7 @@ public final class SmtTTS {
     }
 
     public static final int TTS_TYPE_HMM = 0;
+    public static final int TTS_TYPE_NEURAL = 3;
 
     static {
         System.loadLibrary("smtloader");
