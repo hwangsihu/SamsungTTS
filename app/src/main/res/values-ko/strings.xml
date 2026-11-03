@@ -1,0 +1,4 @@
+<resources>
+    <string name="text_hint">읽을 문장</string>
+    <string name="play">재생</string>
+</resources>

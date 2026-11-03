@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Samsung TTS</string>
+    <string name="text_hint">Text to speak</string>
+    <string name="play">Play</string>
+    <string name="sample_ko">안녕하세요. 삼성 TTS 음성입니다.</string>
+    <string name="sample_en">Hello. This is a Samsung TTS voice.</string>
 </resources>

@@ -33,3 +33,7 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Samsung engine and voice data (tools/import_samsung_assets.py)
+/app/src/main/jniLibs/
+/app/src/main/assets/voices/
