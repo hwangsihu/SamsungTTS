@@ -20,11 +20,11 @@ class CheckVoiceDataActivity : Activity() {
     }
 }
 
+// Answers without a sample, so the Settings app plays its own sentence for the language
+// ("이것은 한국어 음성 합성의 예입니다.").
 class GetSampleTextActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val text = SampleText.forLanguage(intent.getStringExtra("language"))
-        setResult(TextToSpeech.LANG_AVAILABLE, Intent().putExtra(TextToSpeech.Engine.EXTRA_SAMPLE_TEXT, text))
         finish()
     }
 }
