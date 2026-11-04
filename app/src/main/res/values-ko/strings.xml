@@ -1,4 +1,5 @@
 <resources>
+    <string name="app_name">삼성 TTS</string>
     <string name="search_languages">언어 검색</string>
     <string name="voice_count">음성 %d개</string>
     <string name="back">뒤로</string>

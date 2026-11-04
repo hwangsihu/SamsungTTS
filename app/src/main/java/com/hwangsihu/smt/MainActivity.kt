@@ -31,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -156,7 +157,7 @@ private fun VoiceScreen(
     onPlay: (SmtVoice, String) -> Unit,
 ) {
     var text by remember(language.iso3) { mutableStateOf("") }
-    val ui = Locale.getDefault()
+    val ui = LocalLocale.current.platformLocale
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
