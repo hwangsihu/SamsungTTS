@@ -10,6 +10,7 @@ public final class SmtTTS {
     }
 
     public static final int TTS_TYPE_HMM = 0;
+    public static final int TTS_TYPE_UC = 2;
     public static final int TTS_TYPE_NEURAL = 3;
 
     public static final int FEATURE_FP16 = 2;

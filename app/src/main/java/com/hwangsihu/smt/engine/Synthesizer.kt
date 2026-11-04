@@ -61,7 +61,7 @@ interface Synthesizer {
             return if (legacy?.available == true) {
                 LegacySynthesizer.load(context, files, voice, legacy)
             } else {
-                ClassicSynthesizer.load(files, voice)
+                ClassicSynthesizer.load(context, files, voice)
             }
         }
     }
@@ -150,6 +150,7 @@ class ClassicSynthesizer private constructor(private val tts: SmtTTS, private va
 
     companion object {
         private const val ENGINE = "libsamsungttse.so"
+        private const val PACK_ENGINE = "libsamsungtts.so"
 
         // The 3.5 engine speaks 2014 data about twice as fast; this brings it back to the Note 2 tempo.
         private const val NOTE2_RATE_SCALE = 46
@@ -165,18 +166,26 @@ class ClassicSynthesizer private constructor(private val tts: SmtTTS, private va
             }.getOrDefault(false)
         }
 
-        fun load(files: VoiceFiles, voice: SmtVoice): ClassicSynthesizer {
+        fun load(context: Context, files: VoiceFiles, voice: SmtVoice): ClassicSynthesizer {
             val rateScale = if (files.isNote2Format()) NOTE2_RATE_SCALE else 100
             val neural = voice.engine == Engine.NEURAL
-            val ttsType = if (neural) SmtTTS.TTS_TYPE_NEURAL else SmtTTS.TTS_TYPE_HMM
+            // Samsung's service passes the unit-concatenation voices ("s" and "h") as UC voices of type F and M.
+            val (voiceType, ttsType) = when (val type = voice.variant.take(1)) {
+                "s" -> "F" to SmtTTS.TTS_TYPE_UC
+                "h" -> "M" to SmtTTS.TTS_TYPE_UC
+                else -> type to if (neural) SmtTTS.TTS_TYPE_NEURAL else SmtTTS.TTS_TYPE_HMM
+            }
             val features = if (neural && halfPrecision) SmtTTS.FEATURE_FP16 else 0
+            // A pack that brings its own engine (ko_kr_s05, 2020) needs it: the bundled 3.5 engine crashes on its data.
+            val engine = (voice.source as? VoiceSource.Pack)?.takeIf { !neural }
+                ?.let { packLibrary(context, it, PACK_ENGINE) } ?: ENGINE
             val tts = SmtTTS(0)
             check(tts.isValid) { "initialize failed" }
             try {
-                check(tts.loadEngine(ENGINE) == 0) { "loadEngine($ENGINE) failed" }
+                check(tts.loadEngine(engine) == 0) { "loadEngine($engine) failed" }
                 val result = tts.setLanguageWithFD(
                     files.describe(), voice.locale.isO3Language, voice.locale.isO3Country,
-                    voice.variant.take(1), voice.variant.drop(1).toInt(), ttsType, features,
+                    voiceType, voice.variant.drop(1).toInt(), ttsType, features,
                 )
                 check(result == 0) { "setLanguageWithFD(${voice.name}) = $result" }
             } catch (e: Exception) {
@@ -275,7 +284,7 @@ class HdSynthesizer private constructor(private val tts: PowerTTS) : Synthesizer
         private const val LIBRARY = "libsamsungxtts.so"
 
         fun load(context: Context, files: VoiceFiles, pack: VoiceSource.Pack): HdSynthesizer {
-            val tts = PowerTTS(library(context, pack))
+            val tts = PowerTTS(packLibrary(context, pack, LIBRARY) ?: error("${pack.packageName} has no engine for this process"))
             check(tts.initialize() == 0) { "HD initialize failed" }
             val result = tts.setLanguageWithFD(files.describe())
             if (result != 0) {
@@ -284,23 +293,25 @@ class HdSynthesizer private constructor(private val tts: PowerTTS) : Synthesizer
             }
             return HdSynthesizer(tts)
         }
-
-        // A 32-bit process can't use the pack's extracted 64-bit library, so take the 32-bit one from its APK.
-        private fun library(context: Context, pack: VoiceSource.Pack): String {
-            if (Process.is64Bit()) return "${pack.nativeLibraryDir}/$LIBRARY"
-            val apk = File(pack.sourceDir)
-            val target = File(context.codeCacheDir, "xtts/${pack.packageName}-${apk.lastModified()}/$LIBRARY")
-            if (!target.exists()) {
-                target.parentFile!!.mkdirs()
-                ZipFile(apk).use { zip ->
-                    val entry = zip.getEntry("lib/armeabi-v7a/$LIBRARY") ?: error("${pack.packageName} has no 32-bit engine")
-                    zip.getInputStream(entry).use { input -> target.outputStream().use { input.copyTo(it) } }
-                }
-                target.setReadOnly()
-            }
-            return target.absolutePath
-        }
     }
+}
+
+// The pack's own copy of a native library for this process, or null when the pack has none. Only the pack's
+// primary (64-bit) libraries are extracted, so a 32-bit process takes its copy from the pack's APK.
+private fun packLibrary(context: Context, pack: VoiceSource.Pack, name: String): String? {
+    if (Process.is64Bit()) File(pack.nativeLibraryDir, name).takeIf { it.exists() }?.let { return it.absolutePath }
+    val abi = if (Process.is64Bit()) "arm64-v8a" else "armeabi-v7a"
+    val apk = File(pack.sourceDir)
+    val target = File(context.codeCacheDir, "packs/${pack.packageName}-${apk.lastModified()}/$abi/$name")
+    if (!target.exists()) {
+        ZipFile(apk).use { zip ->
+            val entry = zip.getEntry("lib/$abi/$name") ?: return null
+            target.parentFile!!.mkdirs()
+            zip.getInputStream(entry).use { input -> target.outputStream().use { input.copyTo(it) } }
+        }
+        target.setReadOnly()
+    }
+    return target.absolutePath
 }
 
 // Reads 160-byte frames while the engine returns 0 (more audio) or a code keepGoing accepts.
