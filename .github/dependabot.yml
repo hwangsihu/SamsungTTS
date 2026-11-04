@@ -8,3 +8,7 @@ updates:
       androidx:
         patterns:
           - "androidx.*"
+  - package-ecosystem: gitsubmodule
+    directory: /
+    schedule:
+      interval: weekly
