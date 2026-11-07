@@ -76,3 +76,10 @@ if __name__ == '__main__':
                     os.path.join(APP, 'jniLibs', 'armeabi-v7a', 'libsmt2014.so'))
     print('jniLibs/armeabi-v7a/libsmt2014.so')
     import_p600_engine(p600_system)
+    # The 32-bit engines also ship as assets so the dynarmic emulator (libsmtemu.so) can load them
+    # on 64-bit-only devices. Build it with tools/build_emulator.py.
+    engines = os.path.join(APP, 'assets', 'engines')
+    os.makedirs(engines, exist_ok=True)
+    for lib in ('libsmt2014.so', 'libsmtp600.so'):
+        shutil.copyfile(os.path.join(APP, 'jniLibs', 'armeabi-v7a', lib), os.path.join(engines, lib))
+        print(f'assets/engines/{lib}')

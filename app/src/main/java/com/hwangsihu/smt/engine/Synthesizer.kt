@@ -3,6 +3,7 @@ package com.hwangsihu.smt.engine
 import android.content.Context
 import android.content.res.AssetFileDescriptor
 import android.content.res.AssetManager
+import android.util.Log
 import android.os.Process
 import androidx.core.net.toUri
 import com.hwangsihu.smt.voice.Engine
@@ -58,11 +59,11 @@ interface Synthesizer {
                 files.isNote2Format() -> LegacySynthesizer.Kind.NOTE2
                 else -> null
             }
-            return if (legacy?.available == true) {
-                LegacySynthesizer.load(context, files, voice, legacy)
-            } else {
-                ClassicSynthesizer.load(context, files, voice)
+            if (legacy != null) {
+                runCatching { return LegacySynthesizer.load(context, files, voice, legacy) }
+                    .onFailure { Log.e("Synthesizer", "legacy engine unavailable, using the 3.5 engine", it) }
             }
+            return ClassicSynthesizer.load(context, files, voice)
         }
     }
 }
@@ -197,29 +198,37 @@ class ClassicSynthesizer private constructor(private val tts: SmtTTS, private va
     }
 }
 
-// The 2014 engines, driven the way their own SamsungTTSService did it.
-class LegacySynthesizer private constructor(private val kind: Kind, private val locale: Locale) : Synthesizer {
+// The 2014 engines, driven the way their own SamsungTTSService did it. A 32-bit process runs the
+// engine natively; a 64-bit one runs it through the dynarmic emulator (EmulatedEngine).
+class LegacySynthesizer private constructor(
+    private val engine: LegacyEngine,
+    private val kind: Kind,
+    private val locale: Locale,
+) : Synthesizer {
 
-    enum class Kind(private val library: String, private val create: () -> LegacyEngine, val spectrum: Float, val effect: Int) {
-        NOTE2("smt2014", { com.samsung.SMT.SamsungTTSService() }, 0.42f, -1),
-        P600("smtp600", { com.samsung.SMX.SamsungTTSService() }, 100f, 0);
+    enum class Kind(val library: String, val asset: String, private val native: () -> LegacyEngine, val spectrum: Float, val effect: Int) {
+        NOTE2("smt2014", "engines/libsmt2014.so", { com.samsung.SMT.SamsungTTSService() }, 0.42f, -1),
+        P600("smtp600", "engines/libsmtp600.so", { com.samsung.SMX.SamsungTTSService() }, 100f, 0);
 
-        val engine: LegacyEngine by lazy {
+        // The native engine keeps global state, so a process shares one, loaded once.
+        private val shared: LegacyEngine by lazy {
             System.loadLibrary(library)
-            create().also { check(it.initialize() != -1) { "$name engine initialize failed" } }
+            native().also { check(it.initialize() != -1) { "$name engine initialize failed" } }
         }
 
-        val available: Boolean by lazy { !Process.is64Bit() && runCatching { engine }.isSuccess }
+        fun engine(context: Context): LegacyEngine =
+            if (!Process.is64Bit()) shared
+            else EmulatedEngine(context.assets.open(asset).use { it.readBytes() })
+                .also { check(it.initialize() == 0) { "$name emulator failed to load" } }
     }
 
     @Volatile
     private var stopped = false
 
-    override val sampleRate: Int = kind.engine.samplingRate()
+    override val sampleRate: Int = engine.samplingRate()
 
     override fun synthesize(text: String, rate: Int, pitch: Int, sink: AudioSink): Boolean {
         stopped = false
-        val engine = kind.engine
         val utterances = engine.utterances(text, locale)
         if (utterances.isBlank()) return true
         engine.speak(utterances)
@@ -235,13 +244,14 @@ class LegacySynthesizer private constructor(private val kind: Kind, private val 
 
     companion object {
         fun load(context: Context, files: VoiceFiles, voice: SmtVoice, kind: Kind): LegacySynthesizer {
+            val engine = kind.engine(context)
             val dir = files.copyTo(File(context.noBackupFilesDir, "voices/${voice.name}"))
-            val result = kind.engine.setLanguage(
+            val result = engine.setLanguage(
                 dir.absolutePath, voice.locale.isO3Language, voice.locale.isO3Country,
                 voice.variant.take(1), voice.variant.drop(1).toInt(), 0,
             )
             check(result == 0) { "$kind setLanguage(${voice.name}) = $result" }
-            return LegacySynthesizer(kind, voice.locale)
+            return LegacySynthesizer(engine, kind, voice.locale)
         }
 
         // The engine's own text normalizer, which the original services ran before speak().

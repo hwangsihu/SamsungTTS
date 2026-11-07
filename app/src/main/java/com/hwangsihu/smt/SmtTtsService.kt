@@ -96,7 +96,7 @@ class SmtTtsService : TextToSpeechService() {
         }
         val synthesizer = try {
             synthesizerFor(voice)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {  // a missing or broken engine must not crash the TTS service
             Log.e(TAG, "cannot load ${voice.name}", e)
             callback.error(TextToSpeech.ERROR_SYNTHESIS)
             return

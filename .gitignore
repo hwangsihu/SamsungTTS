@@ -37,6 +37,7 @@ google-services.json
 # Samsung engine and voice data (tools/import_samsung_assets.py)
 /app/src/main/jniLibs/
 /app/src/main/assets/voices/
+/app/src/main/assets/engines/
 
 # Build dependencies that are not submodules (tools/fetch_deps.py)
 /third_party/boost/
