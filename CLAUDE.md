@@ -51,6 +51,7 @@ There are no unit tests. Changes are verified by synthesizing speech on a device
 ## Working agreements
 
 - Commit as you go, directly on `main`.
+- Use the latest stable version of every library.
 - Never commit Samsung binaries or voice data. `app/src/main/jniLibs/`, `assets/voices/` and `assets/engines/` stay gitignored and come from `tools/import_samsung_assets.py`.
 - Keep comments to a minimum.
 - The HD voice and the voices bundled with Samsung TTS 3.5.02 are not embedded in the APK, but installed ones must still appear in the voice list.
