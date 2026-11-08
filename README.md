@@ -1,6 +1,6 @@
 # Samsung TTS
 
-An Android text-to-speech engine that brings the voices of older Galaxy devices (Galaxy Note 2, Galaxy S4, Galaxy Note 10.1 2014 Edition, Galaxy J5 and Galaxy Note 8) to current Galaxy phones and to Android devices from other makers. The Note 2, S4, Note 10.1 and J5 voices run on their devices' own engines, so they keep the intonation they had there.
+An Android text-to-speech engine that brings the voices of older Galaxy devices (Galaxy Note 2, Galaxy S4, Galaxy Note 10.1 2014 Edition, Galaxy J5 and Galaxy Note 8) to current Galaxy phones, tablets and watches, and to Android devices from other makers. The Note 2, S4, Note 10.1 and J5 voices run on their devices' own engines, so they keep the intonation they had there.
 
 > [!IMPORTANT]
 > This project is not affiliated with or endorsed by Samsung. The repository contains no Samsung code or voice data: the engines and voices are imported at build time from firmware and APKs you provide.
@@ -19,6 +19,7 @@ An Android text-to-speech engine that brings the voices of older Galaxy devices 
 
 - **Installed voice packs** (`com.samsung.SMT.lang_*`): standard, unit-concatenation, neural (including multi-speaker and multilingual) and HD packs appear next to the embedded voices and are spoken the way Samsung's own TTS speaks them.
 - **64-bit-only phones**: the 2014 engines are 32-bit ARM code. On devices that can no longer run 32-bit code, the app runs them in a built-in ARM emulator based on [dynarmic](https://github.com/azahar-emu/dynarmic).
+- **Phones, tablets, watches and TVs**, from one APK. In wide windows (tablets, foldables, Chromebooks, TVs) a language's voices open next to the language list. Wear OS watches get their own screens with rotary scrolling and swipe to go back, and Android TV lists the app in its launcher and drives it with the D-pad.
 - A default voice per language. Apps that only choose a language, such as TalkBack, follow a new choice without a restart.
 - FP16 for neural voices on devices that support it.
 - The preview in Android's text-to-speech settings speaks Android's standard sample sentences.
@@ -55,7 +56,11 @@ python -I tools/build_emulator.py
 - `import_samsung_assets.py` copies the engines and voices into `app/src/main/jniLibs` and `app/src/main/assets`, which Git ignores. The `system` arguments are the extracted system partitions of each device's firmware.
 - `build_emulator.py` builds `libsmtemu.so` for arm64-v8a and x86_64.
 
-Install the APK, pick voices in the app, then choose Samsung TTS as the preferred engine in Android's text-to-speech settings. Voice packs and HD voices are installed as separate APKs.
+Install the APK, pick voices in the app, then choose Samsung TTS as the preferred engine in Android's text-to-speech settings. Voice packs and HD voices are installed as separate APKs. Watches and TVs take the same APK over ADB; where a device's settings have no engine choice, set the engine from ADB:
+
+```sh
+adb shell settings put secure tts_default_synth com.hwangsihu.smt
+```
 
 ## Project layout
 

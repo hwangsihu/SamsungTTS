@@ -5,4 +5,5 @@
     <string name="back">Back</string>
     <string name="text_hint">Text to speak</string>
     <string name="play">Play</string>
+    <string name="choose_language">Choose a language</string>
 </resources>

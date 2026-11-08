@@ -23,6 +23,7 @@ There are no unit tests. Changes are verified by synthesizing speech on a device
 ## Architecture
 
 - `SmtTtsService` is the `TextToSpeechService`. `VoiceRepository` lists embedded voices and installed packs, found through `com.samsung.SMT.action.CHECK_VOICE_DATA` providers. Embedded voices live in `assets/voices/<device>/<lang>_<variant>` with the device folders `Note2`, `Note8`, `Note10.1`, `S4` and `J5`; their names are `<device>-<lang>-<COUNTRY>-<variant>` (`S4-ko-KR-f00`), and the list follows the folders' name order. Pack metadata decides HD, neural or standard; multi-speaker packs (`voice.data.supported_voices`) give a voice per speaker, multilingual ones (also `voice.data.supported_locales`) a voice per speaker and locale, `voice.data.default_voice` first. Per-language alias voices (`ko-default` and so on) let language-only clients such as TalkBack follow the default chosen in the app.
+- `MainActivity` keeps two screens, the languages and one language's voices, on a Navigation 3 back stack (`Screen`). Phones, tablets and TVs show it through Material 3's list-detail scene, with two panes from the expanded width class up; TVs also get overscan margins, a dark theme and focus outlines. Watches, picked by the watch UI mode, show it through `WatchScreens.kt` with Wear Compose and its swipe-to-dismiss scene. Wear Compose needs API 25, so the manifest overrides its minSdk; only watches load it.
 - `Synthesizer.load` picks the engine:
   - `HdSynthesizer`: HD packs, through `PowerTTS` and the pack's own library.
   - `LegacySynthesizer`: Note 2, SM-P600, S4 and J5 voices, through each device's own engine (`LegacySynthesizer.Kind`, chosen by the device folder).
@@ -43,7 +44,7 @@ There are no unit tests. Changes are verified by synthesizing speech on a device
 
 ## Testing
 
-- Test on the user's Galaxy Tab (SM-X133), which can run 32-bit code; there is no Android emulator any more. A normal install runs the app 32-bit (native device engines). `adb install --abi` cannot override `use32bitAbi`, so to try the 64-bit path (device engines through libsmtemu, the arm64 3.5 engine) build once with `abiFilters` set to `arm64-v8a` alone and `multiArch`/`use32bitAbi` removed from the manifest, uninstall, install, and put both files back.
+- Test on the user's Galaxy Tab (SM-X133), which can run 32-bit code; there is no Android emulator any more. It is 601 dp wide in portrait (one pane) and 1006 dp in landscape (two panes). A normal install runs the app 32-bit (native device engines). `adb install --abi` cannot override `use32bitAbi`, so to try the 64-bit path (device engines through libsmtemu, the arm64 3.5 engine) build once with `abiFilters` set to `arm64-v8a` alone and `multiArch`/`use32bitAbi` removed from the manifest, uninstall, install, and put both files back.
 - To try a device engine on the PC, build `emu.cpp` with `EMU_MAIN` (MSVC) and run `emu <engine.so> <voice folder> <text> <out.wav> <lang> <country> <type> <number> <spectrum> <effect>`.
 - In Git Bash, set `MSYS_NO_PATHCONV=1` for adb so device paths are not rewritten.
 - Do not add self-test receivers or debug hooks to the app; the user checks results themselves.
