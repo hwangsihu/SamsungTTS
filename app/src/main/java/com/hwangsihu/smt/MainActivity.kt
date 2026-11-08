@@ -110,10 +110,7 @@ class MainActivity : ComponentActivity() {
                 if (languages.isNotEmpty()) backStack.removeAll { it is Screen.Voices && languages.none { language -> language.iso3 == it.iso3 } }
             }
             if (device == Configuration.UI_MODE_TYPE_WATCH && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
-                WatchApp(languages, defaults.value, backStack, onSelect = { voice ->
-                    select(voice)
-                    speak(voice, "")
-                })
+                WatchApp(languages, defaults.value, backStack, onSelect = ::select, onPlay = { speak(it, "") })
             } else {
                 val television = device == Configuration.UI_MODE_TYPE_TELEVISION
                 SamsungTTSTheme(darkTheme = television || isSystemInDarkTheme()) {
