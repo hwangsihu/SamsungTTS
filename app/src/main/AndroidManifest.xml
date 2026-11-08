@@ -2,7 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Wear Compose needs API 25. Only watches use it, and every Wear OS watch has API 25 or later. -->
     <uses-sdk tools:overrideLibrary="androidx.wear.compose.foundation,androidx.wear.compose.material.core,androidx.wear.compose.material3,androidx.wear.compose.navigation3" />
 
     <uses-feature

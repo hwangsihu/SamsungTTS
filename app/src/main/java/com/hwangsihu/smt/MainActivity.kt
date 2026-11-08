@@ -85,7 +85,6 @@ internal sealed interface Screen {
     data class Voices(val iso3: String) : Screen
 }
 
-// Opening a language replaces the one shown, so in two panes back leaves the app instead of walking through them.
 internal fun SnapshotStateList<Screen>.open(language: Language) {
     removeAll { it is Screen.Voices }
     add(Screen.Voices(language.iso3))
@@ -161,7 +160,6 @@ private fun rememberBackStack(): SnapshotStateList<Screen> = rememberSaveable(
     ),
 ) { mutableStateListOf<Screen>(Screen.Languages) }
 
-// Phones, tablets, Chromebooks and TVs: the voices open next to the languages once the window is wide enough.
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 private fun App(
@@ -207,7 +205,6 @@ private fun App(
 
 private val TV_OVERSCAN = PaddingValues(horizontal = 48.dp, vertical = 27.dp)
 
-// D-pad and keyboard focus, which the ripple alone shows too faintly on a TV.
 @Composable
 private fun InteractionSource.focusColor(): Color {
     val focused by collectIsFocusedAsState()
@@ -311,7 +308,6 @@ private fun VoiceScreen(
                 val isSelected = voice.name == selected
                 val row = remember { MutableInteractionSource() }
                 val play = remember { MutableInteractionSource() }
-                // The play button sits beside the row rather than in it, so a D-pad can reach it.
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     ListItem(
                         headlineContent = { Text(voice.label) },

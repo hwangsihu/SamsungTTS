@@ -33,7 +33,6 @@ import androidx.wear.compose.material3.lazy.transformedHeight
 import androidx.wear.compose.navigation3.rememberSwipeDismissableSceneStrategy
 import com.hwangsihu.smt.voice.SmtVoice
 
-// Wear OS: the same two screens with Wear Compose; a swipe or the back button returns to the languages.
 @Composable
 internal fun WatchApp(
     languages: List<Language>,
@@ -67,7 +66,6 @@ internal fun WatchApp(
                             val ui = LocalLocale.current.platformLocale
                             val play = stringResource(R.string.play)
                             WatchList(language.name) { spec ->
-                                // The body plays the voice; the radio at the end makes it the default.
                                 items(language.voices, key = { it.name }) { voice ->
                                     SplitRadioButton(
                                         selected = voice.name == defaults[language.iso3],
