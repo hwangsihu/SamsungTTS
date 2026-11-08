@@ -28,6 +28,8 @@ class EmulatedEngine(private val image: ByteArray) : LegacyEngine {
 
     override fun samplingRate(): Int = nSamplingRate()
 
+    fun serve(files: VoiceFiles): String = VoiceFs.serve(files, ::nMount, ::nUnmountAll)
+
     private external fun nCreate(image: ByteArray): Boolean
     private external fun nSetLanguage(dataDir: String, language: String, country: String, voiceType: String, voiceNumber: Int, dictionary: Int): Int
     private external fun nSetParameters(speed: Int, pitch: Int, spectrum: Float, effect: Int)
@@ -36,6 +38,8 @@ class EmulatedEngine(private val image: ByteArray) : LegacyEngine {
     private external fun nSupervisorInput(text: String, language: String, country: String)
     private external fun nNextUtterance(utterance: Array<String?>): Boolean
     private external fun nSamplingRate(): Int
+    private external fun nMount(name: String, fd: Int, offset: Long, length: Long)
+    private external fun nUnmountAll()
 
     companion object {
         init {

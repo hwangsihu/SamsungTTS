@@ -103,6 +103,10 @@ class VoiceFiles(private val context: Context, private val source: VoiceSource) 
         }
     }.toTypedArray()
 
+    fun forEachDescriptor(action: (name: String, fd: Int, offset: Long, length: Long) -> Unit) {
+        for (name in names) open(name).use { action(name, it.parcelFileDescriptor.fd, it.startOffset, it.length) }
+    }
+
     fun copyTo(dir: File): File {
         dir.mkdirs()
         for (name in names) {
@@ -261,10 +265,12 @@ class LegacySynthesizer private constructor(
 
         private val asset get() = "engines/lib$library.so"
 
+        private var redirected = false
 
         // The native engine keeps global state, so a process shares one, loaded once.
         private val shared: LegacyEngine by lazy {
             System.loadLibrary(library)
+            redirected = VoiceFs.redirect(library)
             native().also { check(it.initialize() != -1) { "$name engine initialize failed" } }
         }
 
@@ -272,6 +278,13 @@ class LegacySynthesizer private constructor(
             if (!Process.is64Bit()) shared
             else EmulatedEngine(context.assets.open(asset).use { it.readBytes() })
                 .also { check(it.initialize() == 0) { "$name emulator failed to load" } }
+
+        // The voice folder to hand the engine: VoiceFs, or copies on disk should the native fopen not redirect.
+        fun folder(context: Context, engine: LegacyEngine, files: VoiceFiles, voice: SmtVoice): String = when {
+            engine is EmulatedEngine -> engine.serve(files)
+            redirected -> VoiceFs.serve(files)
+            else -> files.copyTo(File(context.noBackupFilesDir, "voices/${voice.name}")).absolutePath
+        }
     }
 
     @Volatile
@@ -297,9 +310,8 @@ class LegacySynthesizer private constructor(
     companion object {
         fun load(context: Context, files: VoiceFiles, voice: SmtVoice, kind: Kind): LegacySynthesizer {
             val engine = kind.engine(context)
-            val dir = files.copyTo(File(context.noBackupFilesDir, "voices/${voice.name}"))
             val result = engine.setLanguage(
-                dir.absolutePath, voice.locale.isO3Language, voice.locale.isO3Country,
+                kind.folder(context, engine, files, voice), voice.locale.isO3Language, voice.locale.isO3Country,
                 voice.variant.take(1), voice.variant.drop(1).toInt(), 0,
             )
             check(result == 0) { "$kind setLanguage(${voice.name}) = $result" }
@@ -364,8 +376,11 @@ private fun packLibrary(context: Context, pack: VoiceSource.Pack, name: String):
     if (Process.is64Bit()) File(pack.nativeLibraryDir, name).takeIf { it.exists() }?.let { return it.absolutePath }
     val abi = if (Process.is64Bit()) "arm64-v8a" else "armeabi-v7a"
     val apk = File(pack.sourceDir)
-    val target = File(context.codeCacheDir, "packs/${pack.packageName}-${apk.lastModified()}/$abi/$name")
+    val version = "${pack.packageName}-${apk.lastModified()}"
+    val target = File(context.codeCacheDir, "packs/$version/$abi/$name")
     if (!target.exists()) {
+        File(context.codeCacheDir, "packs").listFiles { it.name.startsWith("${pack.packageName}-") && it.name != version }
+            ?.forEach { it.deleteRecursively() }
         ZipFile(apk).use { zip ->
             val entry = zip.getEntry("lib/$abi/$name") ?: return null
             target.parentFile!!.mkdirs()

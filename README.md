@@ -1,6 +1,6 @@
 # Samsung TTS
 
-An Android text-to-speech engine that brings the voices of older Galaxy devices (Galaxy Note 2, Galaxy Note 10.1 2014 Edition and Galaxy Note 8) to current Galaxy phones and to Android devices from other makers. The Note 2 and SM-P600 voices run on their original 2014 engines, so they keep the intonation they had on those devices.
+An Android text-to-speech engine that brings the voices of older Galaxy devices (Galaxy Note 2, Galaxy S4, Galaxy Note 10.1 2014 Edition, Galaxy J5 and Galaxy Note 8) to current Galaxy phones and to Android devices from other makers. The Note 2, S4, Note 10.1 and J5 voices run on their devices' own engines, so they keep the intonation they had there.
 
 > [!IMPORTANT]
 > This project is not affiliated with or endorsed by Samsung. The repository contains no Samsung code or voice data: the engines and voices are imported at build time from firmware and APKs you provide.
@@ -11,11 +11,13 @@ An Android text-to-speech engine that brings the voices of older Galaxy devices 
 
   | Source device | Engine | Languages |
   | --- | --- | --- |
-  | Galaxy Note 2 (SHV-E250L) | 2014 engine | de-DE, en-US, es-ES, fr-FR, it-IT, ja-JP, ko-KR, pt-PT, ru-RU, zh-CN |
-  | Galaxy Note 10.1 2014 Edition (SM-P600) | its own 2014 engine | same as Note 2 |
+  | Galaxy Note 2 (SHV-E250L) | its own engine | de-DE, en-US, es-ES, fr-FR, it-IT, ja-JP, ko-KR, pt-PT, ru-RU, zh-CN |
+  | Galaxy S4 (SHV-E300L) | its own engine | de-DE, en-GB, en-US, es-ES, fr-FR, it-IT, ja-JP, ko-KR, pt-BR, pt-PT, ru-RU, zh-CN |
+  | Galaxy Note 10.1 2014 Edition (SM-P600) | its own engine | same as Note 2 |
+  | Galaxy J5 (SM-J500N0) | its own engine | en-US, ko-KR |
   | Galaxy Note 8 (SM-N950N) | Samsung TTS 3.5 | ko-KR, en-US |
 
-- **Installed voice packs** (`com.samsung.SMT.lang_*`): standard, neural (including multi-speaker) and HD packs appear next to the embedded voices, as they did in Samsung's own TTS.
+- **Installed voice packs** (`com.samsung.SMT.lang_*`): standard, unit-concatenation, neural (including multi-speaker and multilingual) and HD packs appear next to the embedded voices and are spoken the way Samsung's own TTS speaks them.
 - **64-bit-only phones**: the 2014 engines are 32-bit ARM code. On devices that can no longer run 32-bit code, the app runs them in a built-in ARM emulator based on [dynarmic](https://github.com/azahar-emu/dynarmic).
 - A default voice per language. Apps that only choose a language, such as TalkBack, follow a new choice without a restart.
 - FP16 for neural voices on devices that support it.
@@ -26,12 +28,11 @@ An Android text-to-speech engine that brings the voices of older Galaxy devices 
 
 | Engine | Voices | Library |
 | --- | --- | --- |
-| Samsung TTS 3.5 | Note 8, standard and neural packs | `libsmtloader.so` and `libsamsungttse.so` from the Samsung TTS 3.5 APK, or a pack's own engine |
-| 2014 (Note 2) | Note 2 | `libsamsungtts.so` from the Note 2 firmware |
-| 2014 (SM-P600) | SM-P600 | `libsamsungtts.so` from the SM-P600 firmware |
+| Samsung TTS 3.5 | Note 8 and voice packs | `libsmtloader.so` and `libsamsungttse.so` from the Samsung TTS 3.5 APK, or a pack's own engine |
+| Note 2, S4, SM-P600, J5 | that device's voices | each device's `libsamsungtts.so`, from its firmware |
 | HD | HD packs | the pack's own library |
 
-On devices that can run 32-bit code, the app runs as a 32-bit process and loads the 2014 engines directly, with small stand-ins for the platform libraries they expect (`app/src/main/cpp`). In a 64-bit process, `libsmtemu.so` (`app/src/main/cpp/emu`) loads the 32-bit engine into an emulated address space, provides the C library and JNI functions it calls, and runs it with dynarmic.
+The device engines are 32-bit ARM code. On devices that can run 32-bit code, the app runs as a 32-bit process and loads them directly, with small stand-ins for the platform libraries the Note 2 and SM-P600 engines expect (`app/src/main/cpp`). In a 64-bit process, `libsmtemu.so` (`app/src/main/cpp/emu`) loads the 32-bit engine into an emulated address space, provides the C library and JNI functions it calls, and runs it with dynarmic. Either way the engines read their voice files straight from the APK, without copies on disk.
 
 ## Building
 
@@ -45,7 +46,7 @@ The scripts assume Windows. You need:
 git clone --recursive https://github.com/hwangsihu/SamsungTTS.git
 cd SamsungTTS
 python -I tools/fetch_deps.py
-python -I tools/import_samsung_assets.py <Samsung TTS 3.5 APK> <Note 8 tts/lang_SMT> <Note 2 system> <SM-P600 system>
+python -I tools/import_samsung_assets.py <Samsung TTS 3.5 APK> <Note 8 tts/lang_SMT> <Note 2 system> <SM-P600 system> <SHV-E300L system> <SM-J500N0 system>
 python -I tools/build_emulator.py
 ./gradlew assembleDebug
 ```
@@ -60,8 +61,8 @@ Install the APK, pick voices in the app, then choose Samsung TTS as the preferre
 
 ```text
 app/src/main/java/com/hwangsihu/smt/     app, TTS service, voice discovery and synthesizers
-app/src/main/java/com/samsung/SMT, SMX/  classes the Samsung engines register their JNI methods on
-app/src/main/cpp/                        stand-in libraries for the 2014 engines; emu/ is the emulator
+app/src/main/java/com/samsung/           classes the Samsung engines register their JNI methods on
+app/src/main/cpp/                        stand-in libraries and voicefs for the device engines; emu/ is the emulator
 tools/                                   asset import, dependency fetch and emulator build scripts
 third_party/dynarmic/                    dynarmic (submodule)
 ```

@@ -14,6 +14,10 @@
 #include <dynarmic/interface/A32/a32.h>
 #include <dynarmic/interface/A32/config.h>
 
+#ifdef __ANDROID__
+#include "../voicefs.h"
+#endif
+
 using u8 = std::uint8_t;
 using u16 = std::uint16_t;
 using u32 = std::uint32_t;
@@ -278,7 +282,15 @@ void shim(Dynarmic::A32::Jit& jit, const std::string& name) {
         std::fprintf(stderr, "[fatal shim] %s called\n", name.c_str()); g_exited = true; jit.HaltExecution(); return;
     }
     // ---- file I/O: emulated FILE* is a cookie into g_files; __sF range -> host std streams
-    if (name == "fopen") { FILE* fp = std::fopen(cstr(R[0]), cstr(R[1])); if (!fp) { ret(0); return; } g_files.push_back(fp); ret(FILE_COOKIE + u32(g_files.size() - 1)); return; }
+    if (name == "fopen") {
+        FILE* fp = nullptr;
+#ifdef __ANDROID__
+        fp = voicefs_open(cstr(R[0]), cstr(R[1]));
+#endif
+        if (!fp) fp = std::fopen(cstr(R[0]), cstr(R[1]));
+        if (!fp) { ret(0); return; }
+        g_files.push_back(fp); ret(FILE_COOKIE + u32(g_files.size() - 1)); return;
+    }
     if (name == "fclose") { FILE* fp = file_of(R[0]); if (fp && R[0] >= FILE_COOKIE) { std::fclose(fp); g_files[R[0] - FILE_COOKIE] = nullptr; } ret(0); return; }
     if (name == "fread") { FILE* fp = file_of(R[3]); ret(fp && in_arena(R[0], R[1] * R[2]) ? u32(std::fread(host(R[0]), R[1], R[2], fp)) : 0); return; }
     if (name == "fwrite") { FILE* fp = file_of(R[3]); ret(fp ? u32(std::fwrite(host(R[0]), R[1], R[2], fp)) : 0); return; }
@@ -708,5 +720,9 @@ JNIEXPORT jint JNICALL Java_com_hwangsihu_smt_engine_EmulatedEngine_nGetSynthesi
     return code;
 }
 JNIEXPORT jint JNICALL Java_com_hwangsihu_smt_engine_EmulatedEngine_nSamplingRate(JNIEnv*, jobject) { return emu_sampling_rate(); }
+JNIEXPORT void JNICALL Java_com_hwangsihu_smt_engine_EmulatedEngine_nMount(JNIEnv* e, jobject, jstring name, jint fd, jlong offset, jlong length) {
+    voicefs_mount(jstr(e, name).c_str(), fd, offset, length);
+}
+JNIEXPORT void JNICALL Java_com_hwangsihu_smt_engine_EmulatedEngine_nUnmountAll(JNIEnv*, jobject) { voicefs_clear(); }
 }
 #endif
