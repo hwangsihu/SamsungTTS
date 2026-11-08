@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import androidx.core.content.edit
 import java.util.Locale
 
 enum class Engine { CLASSIC, HD, NEURAL }
@@ -73,7 +74,7 @@ class VoiceRepository(private val context: Context) {
         .toMap()
 
     fun setDefault(voice: SmtVoice) {
-        prefs.edit().putString(key(voice.locale.isO3Language), voice.name).apply()
+        prefs.edit { putString(key(voice.locale.isO3Language), voice.name) }
     }
 
     private fun key(iso3Language: String?) = "default_$iso3Language"

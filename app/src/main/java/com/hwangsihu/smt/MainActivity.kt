@@ -66,6 +66,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -248,7 +249,7 @@ private fun LanguageScreen(languages: List<Language>, defaults: Map<String, Stri
                     ListItem(
                         headlineContent = { Text(language.name) },
                         supportingContent = {
-                            Text(listOfNotNull(current?.label, stringResource(R.string.voice_count, language.voices.size)).joinToString(" · "))
+                            Text(listOfNotNull(current?.label, pluralStringResource(R.plurals.voice_count, language.voices.size, language.voices.size)).joinToString(" · "))
                         },
                         colors = if (language.iso3 == open) {
                             val onContainer = MaterialTheme.colorScheme.onSecondaryContainer

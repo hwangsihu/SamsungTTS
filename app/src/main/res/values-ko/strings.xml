@@ -1,7 +1,9 @@
 <resources>
     <string name="app_name">삼성 TTS</string>
     <string name="search_languages">언어 검색</string>
-    <string name="voice_count">음성 %d개</string>
+    <plurals name="voice_count">
+        <item quantity="other">음성 %d개</item>
+    </plurals>
     <string name="back">뒤로</string>
     <string name="text_hint">읽을 문장</string>
     <string name="play">재생</string>

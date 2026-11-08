@@ -1,5 +1,7 @@
 package com.samsung.SMT.engine;
 
+import android.annotation.SuppressLint;
+
 import com.samsung.SMT.ref.VoiceDataInfo;
 
 // libsamsungxtts.so from the HD voice pack binds to these names; keep them as they are.
@@ -7,6 +9,7 @@ public final class PowerTTS {
 
     public static final int BUFFER_SIZE = 160;
 
+    @SuppressLint("UnsafeDynamicallyLoadedCode")
     public PowerTTS(String libraryPath) {
         System.load(libraryPath);
     }

@@ -20,6 +20,8 @@
 
     <application
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
         android:multiArch="true"
         android:use32bitAbi="true"
         android:banner="@drawable/banner"
@@ -42,7 +44,8 @@
         <service
             android:name=".SmtTtsService"
             android:exported="true"
-            android:label="@string/app_name">
+            android:label="@string/app_name"
+            tools:ignore="ExportedService">
             <intent-filter>
                 <action android:name="android.intent.action.TTS_SERVICE" />
                 <category android:name="android.intent.category.DEFAULT" />
