@@ -10,8 +10,11 @@ public final class SmtTTS {
     }
 
     public static final int TTS_TYPE_HMM = 0;
+    public static final int TTS_TYPE_DIC = 1;
     public static final int TTS_TYPE_UC = 2;
     public static final int TTS_TYPE_NEURAL = 3;
+    public static final int TTS_TYPE_NEURAL_MULTISPEAKER = 4;
+    public static final int TTS_TYPE_NEURAL_MULTILINGUAL = 6;
 
     public static final int FEATURE_FP16 = 2;
 
@@ -42,6 +45,10 @@ public final class SmtTTS {
         return getVersion(handle);
     }
 
+    public boolean isSupportMultiInstance() {
+        return isSupportMultiInstance(handle);
+    }
+
     public int getSamplingRate() {
         return getSamplingRate(handle);
     }
@@ -63,6 +70,16 @@ public final class SmtTTS {
         this.sink = sink;
         try {
             return speak(handle, text);
+        } finally {
+            this.sink = null;
+        }
+    }
+
+    // Multilingual neural voices are spoken with their locale, such as "ko-KR".
+    public int speakWithLocales(String text, String locale, AudioSink sink) {
+        this.sink = sink;
+        try {
+            return speakWithLocales(handle, text, locale, null, "");
         } finally {
             this.sink = null;
         }
@@ -94,6 +111,10 @@ public final class SmtTTS {
     private native int unloadEngine(long handle);
 
     private native int getVersion(long handle);
+
+    private native boolean isSupportMultiInstance(long handle);
+
+    private native int speakWithLocales(long handle, String text, String locale, String[] locales, String extra);
 
     private native int getSamplingRate(long handle);
 

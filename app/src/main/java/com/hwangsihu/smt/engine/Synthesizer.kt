@@ -7,6 +7,7 @@ import android.util.Log
 import android.os.Process
 import androidx.core.net.toUri
 import com.hwangsihu.smt.voice.Engine
+import com.hwangsihu.smt.voice.Model
 import com.hwangsihu.smt.voice.SmtVoice
 import com.hwangsihu.smt.voice.VoiceRepository
 import com.hwangsihu.smt.voice.VoiceSource
@@ -136,13 +137,19 @@ class VoiceFiles(private val context: Context, private val source: VoiceSource) 
     }
 }
 
-class ClassicSynthesizer private constructor(private val tts: SmtTTS, private val rateScale: Int) : Synthesizer {
+class ClassicSynthesizer private constructor(
+    private val tts: SmtTTS,
+    private val rateScale: Int,
+    private val speechLocale: String?,
+) : Synthesizer {
 
     override val sampleRate: Int = tts.samplingRate
 
     override fun synthesize(text: String, rate: Int, pitch: Int, sink: AudioSink): Boolean {
         tts.setVoiceControls(rate * rateScale / 100, pitch, 100f, 0)
-        return tts.speak(text) { buffer, offset, length -> sink(buffer, offset, length) } == 0
+        val audio = SmtTTS.AudioSink { buffer, offset, length -> sink(buffer, offset, length) }
+        val result = if (speechLocale != null) tts.speakWithLocales(text, speechLocale, audio) else tts.speak(text, audio)
+        return result == 0
     }
 
     override fun stop() = tts.stopSpeak()
@@ -152,6 +159,13 @@ class ClassicSynthesizer private constructor(private val tts: SmtTTS, private va
     companion object {
         private const val ENGINE = "libsamsungttse.so"
         private const val PACK_ENGINE = "libsamsungtts.so"
+        private val UC_TYPES = setOf("s", "h", "x", "y")
+        private val NEURAL_TYPES = setOf("l", "g", "p", "r", "v", "F", "M")
+        // The engine takes the unit-concatenation voices s and h as F and M, and dictionary voices as f.
+        private val NATIVE_TYPES = mapOf("s" to "F", "h" to "M", "d" to "f")
+        private val OWN_ENGINE_TYPES = setOf("p", "s", "h")
+        private val MULTI_SYNTHESIS_TYPES = setOf("d", "x", "y")
+        private val SLOW_KOREAN_PACKS = setOf("4.2.24.30", "4.2.25.17")
 
         // The 3.5 engine speaks 2014 data about twice as fast; this brings it back to the Note 2 tempo.
         private const val NOTE2_RATE_SCALE = 46
@@ -169,31 +183,60 @@ class ClassicSynthesizer private constructor(private val tts: SmtTTS, private va
 
         fun load(context: Context, files: VoiceFiles, voice: SmtVoice): ClassicSynthesizer {
             val rateScale = if (files.isNote2Format()) NOTE2_RATE_SCALE else 100
-            val neural = voice.engine == Engine.NEURAL
-            // Samsung's service passes the unit-concatenation voices ("s" and "h") as UC voices of type F and M.
-            val (voiceType, ttsType) = when (val type = voice.variant.take(1)) {
-                "s" -> "F" to SmtTTS.TTS_TYPE_UC
-                "h" -> "M" to SmtTTS.TTS_TYPE_UC
-                else -> type to if (neural) SmtTTS.TTS_TYPE_NEURAL else SmtTTS.TTS_TYPE_HMM
-            }
+            val type = voice.variant.take(1)
+            val ttsType = ttsType(voice, type)
+            val neural = ttsType >= SmtTTS.TTS_TYPE_NEURAL
             val features = if (neural && halfPrecision) SmtTTS.FEATURE_FP16 else 0
-            // A pack that brings its own engine (ko_kr_s05, 2020) needs it: the bundled 3.5 engine crashes on its data.
-            val engine = (voice.source as? VoiceSource.Pack)?.takeIf { !neural }
-                ?.let { packLibrary(context, it, PACK_ENGINE) } ?: ENGINE
             val tts = SmtTTS(0)
             check(tts.isValid) { "initialize failed" }
             try {
-                check(tts.loadEngine(engine) == 0) { "loadEngine($engine) failed" }
+                loadEngine(context, tts, voice, type)
                 val result = tts.setLanguageWithFD(
                     files.describe(), voice.locale.isO3Language, voice.locale.isO3Country,
-                    voiceType, voice.variant.drop(1).toInt(), ttsType, features,
+                    NATIVE_TYPES[type] ?: type, voice.variant.drop(1).toInt(), ttsType, features,
                 )
                 check(result == 0) { "setLanguageWithFD(${voice.name}) = $result" }
             } catch (e: Exception) {
                 tts.release()
                 throw e
             }
-            return ClassicSynthesizer(tts, rateScale)
+            val speechLocale = "${voice.locale.language}-${voice.locale.country}".takeIf { voice.model == Model.MULTILINGUAL }
+            return ClassicSynthesizer(tts, rateScale, speechLocale)
+        }
+
+        // As Samsung's service decides it: the voice letter names the kind (s, h, x and y are unit concatenation,
+        // l, g, p, r, v, F and M neural, d a dictionary voice), a neural pack is neural whatever its letter, and a
+        // speaker of a multi-speaker or multilingual pack gets that model's own type.
+        private fun ttsType(voice: SmtVoice, type: String): Int {
+            val kind = when {
+                voice.engine == Engine.NEURAL -> SmtTTS.TTS_TYPE_NEURAL
+                type in UC_TYPES -> SmtTTS.TTS_TYPE_UC
+                type in NEURAL_TYPES -> SmtTTS.TTS_TYPE_NEURAL
+                type == "d" -> SmtTTS.TTS_TYPE_DIC
+                else -> SmtTTS.TTS_TYPE_HMM
+            }
+            if (kind != SmtTTS.TTS_TYPE_NEURAL) return kind
+            return when (voice.model) {
+                Model.SINGLE -> SmtTTS.TTS_TYPE_NEURAL
+                Model.SPEAKER -> SmtTTS.TTS_TYPE_NEURAL_MULTISPEAKER
+                Model.MULTILINGUAL -> SmtTTS.TTS_TYPE_NEURAL_MULTILINGUAL
+            }
+        }
+
+        // A pack that ships its own engine runs on it (ko_kr_s05 crashes the bundled one). Samsung's service
+        // still falls back to the bundled engine when the pack's cannot run several voices at once, and for two
+        // Korean pack versions that answered TalkBack too slowly; it never does for unit-concatenation voices.
+        private fun loadEngine(context: Context, tts: SmtTTS, voice: SmtVoice, type: String) {
+            val pack = voice.source as? VoiceSource.Pack
+            val own = pack?.let { packLibrary(context, it, PACK_ENGINE) }
+            if (own != null && tts.loadEngine(own) == 0) {
+                val korean = voice.locale.isO3Language == "kor" && voice.locale.isO3Country == "KOR"
+                val fallback = type !in OWN_ENGINE_TYPES && (
+                    (type !in MULTI_SYNTHESIS_TYPES && !tts.isSupportMultiInstance) || (korean && pack.version in SLOW_KOREAN_PACKS)
+                    )
+                if (!fallback) return
+            }
+            check(tts.loadEngine(ENGINE) == 0) { "loadEngine($ENGINE) failed" }
         }
     }
 }

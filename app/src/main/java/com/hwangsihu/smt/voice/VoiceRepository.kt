@@ -8,6 +8,9 @@ import java.util.Locale
 
 enum class Engine { CLASSIC, HD, NEURAL }
 
+// SPEAKER is one speaker of a multi-speaker pack; MULTILINGUAL is one speaker reading one of a pack's locales.
+enum class Model { SINGLE, SPEAKER, MULTILINGUAL }
+
 sealed interface VoiceSource {
     // Files missing from dir come from sharedDir (SM-P600 voices reuse the Note 2 models).
     data class Asset(val dir: String, val sharedDir: String? = null) : VoiceSource
@@ -17,6 +20,7 @@ sealed interface VoiceSource {
         val packageName: String,
         val sourceDir: String,
         val nativeLibraryDir: String,
+        val version: String = "",
         val readFromApk: Boolean = false,
     ) : VoiceSource
 }
@@ -29,6 +33,7 @@ data class SmtVoice(
     val engine: Engine,
     val source: VoiceSource,
     val device: String? = null,
+    val model: Model = Model.SINGLE,
 )
 
 class VoiceRepository(private val context: Context) {
@@ -97,11 +102,13 @@ class VoiceRepository(private val context: Context) {
                 val meta = app.metaData ?: return@flatMap emptyList()
                 val (locale, variant) = parse(packageName.removePrefix(PACK_PREFIX)) ?: return@flatMap emptyList()
                 val label = pm.getApplicationLabel(app).toString()
-                val source = VoiceSource.Pack(packageName, app.sourceDir, app.nativeLibraryDir)
+                val version = pm.getPackageInfo(packageName, 0).versionName.orEmpty()
+                val source = VoiceSource.Pack(packageName, app.sourceDir, app.nativeLibraryDir, version)
+                val multi = meta.getBoolean("voice.data.provider.multispeaker") || meta.getBoolean("voice.data.provider.multilingual")
                 when {
                     meta.getBoolean("voice.data.provider.x") ->
                         listOf(SmtVoice(name(locale, variant), locale, variant, label, Engine.HD, source))
-                    meta.getString("voice.data.type") == "neural" -> neuralVoices(meta, locale, variant, label, source)
+                    multi || meta.getString("voice.data.type") == "neural" -> neuralVoices(meta, locale, variant, label, source)
                     meta.getBoolean("voice.data.provider") ->
                         listOf(SmtVoice(name(locale, variant), locale, variant, label, Engine.CLASSIC, source))
                     else -> emptyList()
@@ -109,18 +116,33 @@ class VoiceRepository(private val context: Context) {
             }
     }
 
-    // A multi-speaker pack (ko_kr_r00) lists its speakers in voice.data.supported_voices, such as l05 and g01.
+    // A multi-speaker pack (ko_kr_r00) lists its speakers in voice.data.supported_voices, such as l05 and g01; a
+    // multilingual one also lists the locales each speaker reads in voice.data.supported_locales. Samsung's
+    // service offers every speaker (and locale) as a voice, the pack's voice.data.default_voice first.
     private fun neuralVoices(meta: Bundle, locale: Locale, variant: String, label: String, pack: VoiceSource.Pack): List<SmtVoice> {
         val source = pack.copy(readFromApk = true)
-        val speakers = meta.getString("voice.data.supported_voices").orEmpty().split(':').filter { SPEAKER.matches(it) }
-        if (!meta.getBoolean("voice.data.provider.multispeaker") || speakers.isEmpty()) {
+        val speakers = values(meta, "voice.data.supported_voices").filter { SPEAKER.matches(it) }
+        val locales = values(meta, "voice.data.supported_locales").mapNotNull(::localeOf)
+        val model = when {
+            speakers.isEmpty() -> Model.SINGLE
+            locales.isNotEmpty() -> Model.MULTILINGUAL
+            meta.getBoolean("voice.data.provider.multispeaker") -> Model.SPEAKER
+            else -> Model.SINGLE
+        }
+        if (model == Model.SINGLE) {
             return listOf(SmtVoice(name(locale, variant) + NEURAL_SUFFIX, locale, variant, label, Engine.NEURAL, source))
         }
+        val preferred = meta.getString("voice.data.default_voice")
         val names = speakerNames(source.packageName)
-        return speakers
-            .map { id -> SmtVoice(name(locale, id) + NEURAL_SUFFIX, locale, id, "$label ${names[id] ?: id}", Engine.NEURAL, source) }
-            .sortedBy { it.label }
+        return (if (model == Model.MULTILINGUAL) locales else listOf(locale)).flatMap { speakerLocale ->
+            speakers.map { id ->
+                val speakerLabel = "$label ${names[id] ?: id}"
+                SmtVoice(name(speakerLocale, id) + NEURAL_SUFFIX, speakerLocale, id, speakerLabel, Engine.NEURAL, source, model = model)
+            }
+        }.sortedWith(compareBy({ it.variant != preferred }, { it.label }))
     }
+
+    private fun values(meta: Bundle, key: String) = meta.getString(key).orEmpty().split(':').filter { it.isNotBlank() && it != "NA" }
 
     // The pack's cfg ends with key/value strings such as "multispeaker_0" -> "voice1:voice 1:음성1:음성 1:l05:F05:두리:0":
     // the English and Korean display names come second and fourth, the speaker id fifth.
@@ -161,5 +183,15 @@ class VoiceRepository(private val context: Context) {
         }
 
         private fun name(locale: Locale, variant: String) = "${locale.language}-${locale.country}-$variant"
+
+        // "ko_KR", "ko-KR" or the ISO 639-2 form "kor-KOR".
+        private fun localeOf(tag: String): Locale? {
+            val (language, country) = tag.split('-', '_').takeIf { it.size == 2 } ?: return null
+            if (language.length == 2) return Locale.Builder().setLanguage(language).setRegion(country.uppercase(Locale.ROOT)).build()
+            return Locale.getAvailableLocales().firstOrNull {
+                runCatching { it.isO3Language == language.lowercase(Locale.ROOT) && it.isO3Country == country.uppercase(Locale.ROOT) }
+                    .getOrDefault(false)
+            }
+        }
     }
 }
