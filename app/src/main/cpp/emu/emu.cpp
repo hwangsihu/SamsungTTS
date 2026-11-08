@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cmath>
+#include <ctime>
 #include <map>
 #include <string>
 #include <vector>
@@ -269,7 +270,11 @@ void shim(Dynarmic::A32::Jit& jit, const std::string& name) {
     if (name == "exit") { g_exited = true; g_exit_code = int(R[0]); jit.HaltExecution(); return; }
     if (name == "__cxa_atexit" || name == "__aeabi_atexit" || name == "__cxa_finalize") { ret(0); return; }
     if (name == "pthread_mutex_init" || name == "pthread_mutex_destroy" || name == "pthread_mutex_lock" || name == "pthread_mutex_unlock") { ret(0); return; }
-    if (name == "__stack_chk_fail" || name == "__cxa_pure_virtual" || name == "__aeabi_unwind_cpp_pr0" || name == "__aeabi_unwind_cpp_pr1") {
+    if (name == "clock") { ret(u32(double(std::clock()) * (1000000.0 / CLOCKS_PER_SEC))); return; }  // bionic CLOCKS_PER_SEC
+    // The unwinder entries are only reached when the engine throws a C++ exception.
+    if (name == "__stack_chk_fail" || name == "__cxa_pure_virtual" || name == "__aeabi_unwind_cpp_pr0" || name == "__aeabi_unwind_cpp_pr1" ||
+        name == "abort" || name == "raise" || name == "__cxa_begin_cleanup" || name == "__cxa_call_unexpected" ||
+        name == "__cxa_type_match" || name == "__gnu_Unwind_Find_exidx") {
         std::fprintf(stderr, "[fatal shim] %s called\n", name.c_str()); g_exited = true; jit.HaltExecution(); return;
     }
     // ---- file I/O: emulated FILE* is a cookie into g_files; __sF range -> host std streams
@@ -593,7 +598,8 @@ void emu_supervisor_input(const char* text, const char* lang, const char* countr
 }
 bool emu_next_utterance(std::string& out) {
     u32 arr = new_obj_array(3);
-    if (!call_argv(find_native("supervisor_GetUtterance"), {ENV_CELL, g_thiz, arr})) return false;
+    // r3 = 0: the newer engines take an "other engine" flag here; the Note 2 one ignores it
+    if (!call_argv(find_native("supervisor_GetUtterance"), {ENV_CELL, g_thiz, arr, 0})) return false;
     u32 e0 = g_obj_arrays[arr - JOARR][0];
     out = (e0 >= JSTR) ? g_jstrings[e0 - JSTR] : std::string();
     return true;
@@ -624,16 +630,24 @@ int main(int argc, char** argv) {
 
     if (!emu_init(file.data(), file.size())) { std::fprintf(stderr, "emu_init failed (exited=%d)\n", emu_exited()); return 1; }
     std::fprintf(stderr, "loaded, %zu natives\n", g_natives.size());
+    for (auto& n : g_natives) std::fprintf(stderr, "  %s%s\n", n.name.c_str(), n.sig.c_str());
 
+    // emu <engine.so> [dataDir] [text] [out.wav] [lang country type number] [spectrum effect]
     const char* data_dir = argc >= 3 ? argv[2] : "C:/SamsungTTS/app/src/main/assets/voices/note2/ko_KR_f01";
-    const char* text_utf = argc >= 4 ? argv[3] : "\xec\x95\x88\xeb\x85\x95\xed\x95\x98\xec\x84\xb8\xec\x9a\x94";
-    std::fprintf(stderr, "setLanguage = %d\n", emu_set_language(data_dir, "kor", "KOR", "f", 1, 0));
+    const char* text_utf = argc >= 4 && argv[3][0] ? argv[3] : "\xec\x95\x88\xeb\x85\x95\xed\x95\x98\xec\x84\xb8\xec\x9a\x94";
+    const char* lang = argc >= 9 ? argv[5] : "kor";
+    const char* country = argc >= 9 ? argv[6] : "KOR";
+    const char* type = argc >= 9 ? argv[7] : "f";
+    int number = argc >= 9 ? std::atoi(argv[8]) : 1;
+    float spectrum = argc >= 11 ? float(std::atof(argv[9])) : 0.42f;
+    int effect = argc >= 11 ? std::atoi(argv[10]) : -1;
+    std::fprintf(stderr, "setLanguage = %d\n", emu_set_language(data_dir, lang, country, type, number, 0));
 
-    emu_supervisor_input(text_utf, "kor", "KOR");
+    emu_supervisor_input(text_utf, lang, country);
     std::string utter, u;
     while (emu_next_utterance(u)) utter += u;
     emu_speak(utter.empty() ? text_utf : utter.c_str());
-    emu_set_parameters(100, 100, 0.42f, -1);
+    emu_set_parameters(100, 100, spectrum, effect);
 
     std::vector<u8> pcm(160);
     std::vector<u8> all;

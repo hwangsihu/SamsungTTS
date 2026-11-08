@@ -83,7 +83,7 @@ class VoiceRepository(private val context: Context) {
         context.assets.list("$ASSET_ROOT/$device").orEmpty().mapNotNull { dir ->
             parse(dir)?.let { (locale, variant) ->
                 SmtVoice(
-                    name(locale, variant) + info.nameSuffix, locale, variant, "${info.label} $variant", Engine.CLASSIC,
+                    "$device-${name(locale, variant)}", locale, variant, "${info.label} $variant", Engine.CLASSIC,
                     VoiceSource.Asset("$ASSET_ROOT/$device/$dir", info.sharesWith?.let { "$ASSET_ROOT/$it/$dir" }),
                     device,
                 )
@@ -159,18 +159,25 @@ class VoiceRepository(private val context: Context) {
             .toMap()
     }.getOrDefault(emptyMap())
 
-    private data class Device(val label: String, val nameSuffix: String = "", val sharesWith: String? = null)
+    private data class Device(val label: String, val sharesWith: String? = null)
 
     companion object {
         const val ACTION_CHECK_VOICE_DATA = "com.samsung.SMT.action.CHECK_VOICE_DATA"
-        const val DEVICE_P600 = "p600"
+        // Folders under assets/voices; the voice list shows them in name order.
+        const val DEVICE_NOTE2 = "Note2"
+        const val DEVICE_P600 = "Note10.1"
+        const val DEVICE_E300 = "S4"
+        const val DEVICE_J500 = "J5"
+        private const val DEVICE_NOTE8 = "Note8"
         private const val ALIAS_SUFFIX = "-default"
         private const val PACK_PREFIX = "com.samsung.SMT.lang_"
         private const val ASSET_ROOT = "voices"
         private val DEVICES = mapOf(
-            "note2" to Device("Note 2"),
-            "note8" to Device("Note 8"),
-            DEVICE_P600 to Device("Note 10.1 2014", nameSuffix = "-p600", sharesWith = "note2"),
+            DEVICE_NOTE2 to Device("Note 2"),
+            DEVICE_NOTE8 to Device("Note 8"),
+            DEVICE_P600 to Device("Note 10.1 2014", sharesWith = DEVICE_NOTE2),
+            DEVICE_E300 to Device("S4"),
+            DEVICE_J500 to Device("J5"),
         )
         private const val NEURAL_SUFFIX = "-neural"
         private val ID = Regex("^([a-z]{2})_([a-zA-Z]{2})_([a-zA-Z][0-9]{2})$")

@@ -55,11 +55,8 @@ interface Synthesizer {
         fun load(context: Context, voice: SmtVoice): Synthesizer {
             val files = VoiceFiles(context, voice.source)
             if (voice.engine == Engine.HD) return HdSynthesizer.load(context, files, voice.source as VoiceSource.Pack)
-            val legacy = when {
-                voice.device == VoiceRepository.DEVICE_P600 -> LegacySynthesizer.Kind.P600
-                files.isNote2Format() -> LegacySynthesizer.Kind.NOTE2
-                else -> null
-            }
+            val legacy = LegacySynthesizer.Kind.entries.firstOrNull { it.device == voice.device }
+                ?: LegacySynthesizer.Kind.NOTE2.takeIf { files.isNote2Format() }
             if (legacy != null) {
                 runCatching { return LegacySynthesizer.load(context, files, voice, legacy) }
                     .onFailure { Log.e("Synthesizer", "legacy engine unavailable, using the 3.5 engine", it) }
@@ -249,9 +246,21 @@ class LegacySynthesizer private constructor(
     private val locale: Locale,
 ) : Synthesizer {
 
-    enum class Kind(val library: String, val asset: String, private val native: () -> LegacyEngine, val spectrum: Float, val effect: Int) {
-        NOTE2("smt2014", "engines/libsmt2014.so", { com.samsung.SMT.SamsungTTSService() }, 0.42f, -1),
-        P600("smtp600", "engines/libsmtp600.so", { com.samsung.SMX.SamsungTTSService() }, 100f, 0);
+    // spectrum and effect are what each device's own SamsungTTSService passed to setParameters.
+    enum class Kind(
+        val device: String,
+        val library: String,
+        private val native: () -> LegacyEngine,
+        val spectrum: Float,
+        val effect: Int,
+    ) {
+        NOTE2(VoiceRepository.DEVICE_NOTE2, "smt2014", { com.samsung.SMT.SamsungTTSService() }, 0.42f, -1),
+        P600(VoiceRepository.DEVICE_P600, "smtp600", { com.samsung.SMX.SamsungTTSService() }, 100f, 0),
+        E300(VoiceRepository.DEVICE_E300, "smte300", { com.samsung.SME.SamsungTTSService() }, 100f, 0),
+        J500(VoiceRepository.DEVICE_J500, "smtj500", { com.samsung.SMJ.SamsungTTSService() }, 100f, 0);
+
+        private val asset get() = "engines/lib$library.so"
+
 
         // The native engine keeps global state, so a process shares one, loaded once.
         private val shared: LegacyEngine by lazy {
