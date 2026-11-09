@@ -20,7 +20,7 @@ adb install -r -t -g app/build/outputs/apk/debug/app-debug.apk
 
 Debug and release builds are both signed with the key that `keystore.properties` in the root names (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`; `storeFile` is relative to the root). The file is gitignored; if it is missing or a value is empty, Gradle warns, debug builds use the debug key and release builds are left unsigned.
 
-There are no unit tests. Changes are verified by synthesizing speech on a device (see Testing).
+There are no unit tests. Changes are verified by synthesizing speech on a device (see Testing). CI (`.github/workflows/build.yml`) runs `./gradlew build` and `tools/build_emulator.py` on Ubuntu without any Samsung files, so it only checks that everything compiles and passes lint.
 
 ## Architecture
 
@@ -38,7 +38,7 @@ There are no unit tests. Changes are verified by synthesizing speech on a device
 ## Native build notes
 
 - Gradle does not build libsmtemu. After changing `emu.cpp`, rerun `tools/build_emulator.py`; Gradle packages whatever is in `jniLibs`.
-- CMake and Ninja come from Visual Studio Build Tools 18 (`vcvars64.bat` for MSVC builds), with NDK 30.0.16248370. There is no SDK CMake.
+- CMake and Ninja come from Visual Studio Build Tools 18 (`vcvars64.bat` for MSVC builds), with NDK 30.0.16248370. There is no SDK CMake. Elsewhere, as on CI, `build_emulator.py` takes CMake and Ninja from PATH and the SDK from `ANDROID_HOME`; it reads the NDK version from `app/build.gradle.kts`.
 - CMake 4 dropped FindBoost. `tools/cmake/Boost` is a header-only `BoostConfig` that points at `third_party/boost`.
 - dynarmic's bundled fmt needs `-include stdlib.h` under NDK clang; `build_emulator.py` sets it.
 - Keep C and C++ sources ASCII. Under the Korean code page, MSVC misread a Korean comment and swallowed the next line; build with `/utf-8`.

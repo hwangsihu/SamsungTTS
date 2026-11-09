@@ -8,16 +8,20 @@ Needs the dynarmic submodule and Boost:
 usage: python -I tools/build_emulator.py
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-SDK = os.path.join(os.path.expanduser('~'), 'AppData', 'Local', 'Android', 'Sdk')
-NDK = os.path.join(SDK, 'ndk', '30.0.16248370')
+SDK = os.environ.get('ANDROID_HOME') or os.path.join(os.path.expanduser('~'), 'AppData', 'Local', 'Android', 'Sdk')
+with open(os.path.join(ROOT, 'app', 'build.gradle.kts'), encoding='utf-8') as f:
+    NDK = os.path.join(SDK, 'ndk', re.search(r'ndkVersion = "(.+)"', f.read())[1])
 VS = r'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake'
 CMAKE = os.path.join(VS, 'CMake', 'bin', 'cmake.exe')
 NINJA = os.path.join(VS, 'Ninja', 'ninja.exe')
+if not os.path.exists(CMAKE):
+    CMAKE, NINJA = shutil.which('cmake'), shutil.which('ninja')
 ABIS = ('arm64-v8a', 'x86_64')  # 64-bit only; 32-bit devices run the engine natively
 
 
