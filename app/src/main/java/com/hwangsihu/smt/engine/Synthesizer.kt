@@ -71,7 +71,7 @@ class VoiceFiles(private val context: Context, private val source: VoiceSource) 
     private val base = (source as? VoiceSource.Pack)?.let { "content://${it.packageName}.VoiceDataProvider" }
 
     private val assetDirs: Map<String, String> = (source as? VoiceSource.Asset)?.let { asset ->
-        listOfNotNull(asset.sharedDir, asset.dir).flatMap { dir -> context.assets.list(dir).orEmpty().map { it to dir } }.toMap()
+        (asset.sharedDirs + asset.dir).flatMap { dir -> context.assets.list(dir).orEmpty().map { it to dir } }.toMap()
     }.orEmpty()
 
     private val apkAssets: AssetManager? = (source as? VoiceSource.Pack)?.takeIf { it.readFromApk }
@@ -261,7 +261,8 @@ class LegacySynthesizer private constructor(
         NOTE2(VoiceRepository.DEVICE_NOTE2, "smt2014", { com.samsung.SMT.SamsungTTSService() }, 0.42f, -1),
         P600(VoiceRepository.DEVICE_P600, "smtp600", { com.samsung.SMX.SamsungTTSService() }, 100f, 0),
         E300(VoiceRepository.DEVICE_E300, "smte300", { com.samsung.SME.SamsungTTSService() }, 100f, 0),
-        J500(VoiceRepository.DEVICE_J500, "smtj500", { com.samsung.SMJ.SamsungTTSService() }, 100f, 0);
+        J500(VoiceRepository.DEVICE_J500, "smtj500", { com.samsung.SMJ.SamsungTTSService() }, 100f, 0),
+        N910(VoiceRepository.DEVICE_N910, "smtn910", { com.samsung.SMN.engine.SmtTTS() }, 100f, 0);
 
         private val asset get() = "engines/lib$library.so"
 

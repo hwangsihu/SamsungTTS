@@ -12,6 +12,7 @@ object SampleText {
         "por" to "Olá. Esta é uma voz do Samsung TTS.",
         "rus" to "Здравствуйте. Это голос Samsung TTS.",
         "zho" to "你好。这是三星TTS语音。",
+        "hin" to "नमस्ते। यह सैमसंग TTS की आवाज़ है।",
     )
 
     fun forLanguage(iso3Language: String?): String = byIso3[iso3Language] ?: byIso3.getValue("eng")

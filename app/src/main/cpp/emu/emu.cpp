@@ -273,6 +273,8 @@ void shim(Dynarmic::A32::Jit& jit, const std::string& name) {
     if (name == "setjmp") { ret(0); return; }
     if (name == "exit") { g_exited = true; g_exit_code = int(R[0]); jit.HaltExecution(); return; }
     if (name == "__cxa_atexit" || name == "__aeabi_atexit" || name == "__cxa_finalize") { ret(0); return; }
+    if (name == "__cxa_guard_acquire") { ret((r32(R[0]) & 1) ? 0 : 1); return; }
+    if (name == "__cxa_guard_release") { w32(R[0], 1); return; }
     if (name == "pthread_mutex_init" || name == "pthread_mutex_destroy" || name == "pthread_mutex_lock" || name == "pthread_mutex_unlock") { ret(0); return; }
     if (name == "clock") { ret(u32(double(std::clock()) * (1000000.0 / CLOCKS_PER_SEC))); return; }  // bionic CLOCKS_PER_SEC
     // The unwinder entries are only reached when the engine throws a C++ exception.

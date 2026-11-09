@@ -13,8 +13,9 @@ enum class Engine { CLASSIC, HD, NEURAL }
 enum class Model { SINGLE, SPEAKER, MULTILINGUAL }
 
 sealed interface VoiceSource {
-    // Files missing from dir come from sharedDir (SM-P600 voices reuse the Note 2 models).
-    data class Asset(val dir: String, val sharedDir: String? = null) : VoiceSource
+    // Files missing from dir come from sharedDirs (the SM-P600 voices reuse the Note 2 models, the Note 4 ones some of
+    // the S4 and Note 8 models).
+    data class Asset(val dir: String, val sharedDirs: List<String> = emptyList()) : VoiceSource
     // Packs made for the 3.5 engine hand their files only to Samsung's own TTS ("Not allowed uid"), so
     // readFromApk takes them straight from the pack's APK, where they sit uncompressed under assets/.
     data class Pack(
@@ -85,7 +86,7 @@ class VoiceRepository(private val context: Context) {
             parse(dir)?.let { (locale, variant) ->
                 SmtVoice(
                     "$device-${name(locale, variant)}", locale, variant, "${info.label} $variant", Engine.CLASSIC,
-                    VoiceSource.Asset("$ASSET_ROOT/$device/$dir", info.sharesWith?.let { "$ASSET_ROOT/$it/$dir" }),
+                    VoiceSource.Asset("$ASSET_ROOT/$device/$dir", info.sharesWith.map { "$ASSET_ROOT/$it/$dir" }),
                     device,
                 )
             }
@@ -160,7 +161,7 @@ class VoiceRepository(private val context: Context) {
             .toMap()
     }.getOrDefault(emptyMap())
 
-    private data class Device(val label: String, val sharesWith: String? = null)
+    private data class Device(val label: String, val sharesWith: List<String> = emptyList())
 
     companion object {
         const val ACTION_CHECK_VOICE_DATA = "com.samsung.SMT.action.CHECK_VOICE_DATA"
@@ -169,6 +170,7 @@ class VoiceRepository(private val context: Context) {
         const val DEVICE_P600 = "Note10.1"
         const val DEVICE_E300 = "S4"
         const val DEVICE_J500 = "J5"
+        const val DEVICE_N910 = "Note4"
         private const val DEVICE_NOTE8 = "Note8"
         private const val ALIAS_SUFFIX = "-default"
         private const val PACK_PREFIX = "com.samsung.SMT.lang_"
@@ -176,9 +178,10 @@ class VoiceRepository(private val context: Context) {
         private val DEVICES = mapOf(
             DEVICE_NOTE2 to Device("Note 2"),
             DEVICE_NOTE8 to Device("Note 8"),
-            DEVICE_P600 to Device("Note 10.1 2014", sharesWith = DEVICE_NOTE2),
+            DEVICE_P600 to Device("Note 10.1 2014", sharesWith = listOf(DEVICE_NOTE2)),
             DEVICE_E300 to Device("S4"),
             DEVICE_J500 to Device("J5"),
+            DEVICE_N910 to Device("Note 4", sharesWith = listOf(DEVICE_E300, DEVICE_NOTE8)),
         )
         private const val NEURAL_SUFFIX = "-neural"
         private val ID = Regex("^([a-z]{2})_([a-zA-Z]{2})_([a-zA-Z][0-9]{2})$")
