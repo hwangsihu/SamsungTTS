@@ -1,12 +1,10 @@
 <resources>
     <string name="app_name">Samsung TTS</string>
-    <string name="search_languages">Search languages</string>
     <plurals name="voice_count">
         <item quantity="one">%d voice</item>
         <item quantity="other">%d voices</item>
     </plurals>
     <string name="back">Back</string>
-    <string name="text_hint">Text to speak</string>
     <string name="play">Play</string>
     <string name="choose_language">Choose a language</string>
     <string name="not_preferred_engine">Samsung TTS isn\'t the preferred engine</string>

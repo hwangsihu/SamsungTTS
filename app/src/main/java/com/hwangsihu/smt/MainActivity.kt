@@ -39,7 +39,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -60,14 +59,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLocale
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -116,7 +113,7 @@ class MainActivity : ComponentActivity() {
                 if (languages.isNotEmpty()) backStack.removeAll { it is Screen.Voices && languages.none { language -> language.iso3 == it.iso3 } }
             }
             if (device == Configuration.UI_MODE_TYPE_WATCH && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
-                WatchApp(languages, defaults.value, backStack, onSelect = ::select, onPlay = { speak(it, "") })
+                WatchApp(languages, defaults.value, backStack, onSelect = ::select, onPlay = ::speak)
             } else {
                 val television = device == Configuration.UI_MODE_TYPE_TELEVISION
                 SamsungTTSTheme(darkTheme = television || isSystemInDarkTheme()) {
@@ -149,10 +146,10 @@ class MainActivity : ComponentActivity() {
         defaults.value = repository.defaults()
     }
 
-    private fun speak(voice: SmtVoice, text: String) {
+    private fun speak(voice: SmtVoice) {
         val engine = tts ?: return
         engine.voices?.firstOrNull { it.name == voice.name }?.let { engine.voice = it }
-        engine.speak(text.ifBlank { SampleText.forLanguage(voice.locale.isO3Language) }, TextToSpeech.QUEUE_FLUSH, null, voice.name)
+        engine.speak(SampleText.forLanguage(voice.locale.isO3Language), TextToSpeech.QUEUE_FLUSH, null, voice.name)
     }
 
     private fun languages(voices: List<SmtVoice>): List<Language> {
@@ -180,12 +177,11 @@ private fun App(
     backStack: SnapshotStateList<Screen>,
     television: Boolean,
     onSelect: (SmtVoice) -> Unit,
-    onPlay: (SmtVoice, String) -> Unit,
+    onPlay: (SmtVoice) -> Unit,
     onOpenTtsSettings: (() -> Unit)?,
 ) {
     val directive = calculatePaneScaffoldDirective(currentWindowAdaptiveInfoV2())
     val twoPane = directive.maxHorizontalPartitions > 1
-    val keyboard = LocalSoftwareKeyboardController.current
     val open = (backStack.last() as? Screen.Voices)?.iso3
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         NavDisplay(
@@ -196,10 +192,7 @@ private fun App(
             sceneStrategies = listOf(rememberListDetailSceneStrategy(directive = directive)),
             entryProvider = entryProvider {
                 entry<Screen.Languages>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = { Placeholder() })) {
-                    LanguageScreen(languages, defaults, open, onOpenTtsSettings) { language ->
-                        keyboard?.hide()
-                        backStack.open(language)
-                    }
+                    LanguageScreen(languages, defaults, open, onOpenTtsSettings) { language -> backStack.open(language) }
                 }
                 entry<Screen.Voices>(metadata = ListDetailSceneStrategy.detailPane()) { key ->
                     languages.firstOrNull { it.iso3 == key.iso3 }?.let { language ->
@@ -268,31 +261,14 @@ private fun LanguageScreen(
     onOpenTtsSettings: (() -> Unit)?,
     onOpen: (Language) -> Unit,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
-    val shown = languages.filter { language ->
-        query.isBlank() || listOf(
-            language.name,
-            language.voices.first().locale.getDisplayLanguage(Locale.ENGLISH),
-            language.iso3,
-            language.voices.first().locale.language,
-        ).any { it.contains(query.trim(), ignoreCase = true) }
-    }
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
     ) { padding ->
         Column(Modifier.padding(padding)) {
             if (onOpenTtsSettings != null) PreferredEngineCard(onOpenTtsSettings)
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = { Text(stringResource(R.string.search_languages)) },
-                leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-            )
             LazyColumn {
-                items(shown, key = { it.iso3 }) { language ->
+                items(languages, key = { it.iso3 }) { language ->
                     val current = language.voices.firstOrNull { it.name == defaults[language.iso3] }
                     val interaction = remember { MutableInteractionSource() }
                     ListItem(
@@ -327,9 +303,8 @@ private fun VoiceScreen(
     selected: String?,
     onBack: (() -> Unit)?,
     onSelect: (SmtVoice) -> Unit,
-    onPlay: (SmtVoice, String) -> Unit,
+    onPlay: (SmtVoice) -> Unit,
 ) {
-    var text by rememberSaveable { mutableStateOf("") }
     val ui = LocalLocale.current.platformLocale
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -347,15 +322,6 @@ private fun VoiceScreen(
         },
     ) { padding ->
         LazyColumn(Modifier.selectableGroup(), contentPadding = padding) {
-            item {
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    label = { Text(stringResource(R.string.text_hint)) },
-                    placeholder = { Text(SampleText.forLanguage(language.iso3)) },
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                )
-            }
             items(language.voices, key = { it.name }) { voice ->
                 val isSelected = voice.name == selected
                 val row = remember { MutableInteractionSource() }
@@ -371,7 +337,7 @@ private fun VoiceScreen(
                             .selectable(isSelected, row, ripple(), role = Role.RadioButton) { onSelect(voice) },
                     )
                     TextButton(
-                        onClick = { onPlay(voice, text) },
+                        onClick = { onPlay(voice) },
                         modifier = Modifier.padding(end = 8.dp),
                         border = BorderStroke(2.dp, play.focusColor()),
                         interactionSource = play,
