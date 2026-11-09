@@ -38,7 +38,7 @@ There are no unit tests. Changes are verified by synthesizing speech on a device
 ## Native build notes
 
 - Gradle does not build libsmtemu. After changing `emu.cpp`, rerun `tools/build_emulator.py`; Gradle packages whatever is in `jniLibs`.
-- CMake and Ninja come from Visual Studio Build Tools 18 (`vcvars64.bat` for MSVC builds), with NDK 30.0.16248370. There is no SDK CMake. Elsewhere, as on CI, `build_emulator.py` takes CMake and Ninja from PATH and the SDK from `ANDROID_HOME`; it reads the NDK version from `app/build.gradle.kts`.
+- `build_emulator.py` takes CMake and Ninja from PATH (as on CI), or else from the newest Visual Studio with C++ CMake tools for Windows that vswhere finds: here Build Tools 18 (`vcvars64.bat` for MSVC builds). There is no SDK CMake. The NDK is the `ndkVersion` of `app/build.gradle.kts` (30.0.16248370) in the SDK that `ANDROID_HOME` points to.
 - CMake 4 dropped FindBoost. `tools/cmake/Boost` is a header-only `BoostConfig` that points at `third_party/boost`.
 - dynarmic's bundled fmt needs `-include stdlib.h` under NDK clang; `build_emulator.py` sets it.
 - Keep C and C++ sources ASCII. Under the Korean code page, MSVC misread a Korean comment and swallowed the next line; build with `/utf-8`.

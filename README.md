@@ -41,10 +41,10 @@ The device engines are 32-bit ARM code. On devices that can run 32-bit code, the
 
 ## Building
 
-The scripts assume Windows. You need:
+You need:
 
 - the Android SDK with API 37 and NDK 30.0.16248370
-- Visual Studio Build Tools 18, whose CMake and Ninja build the emulator
+- CMake and Ninja, on PATH or from Visual Studio with C++ CMake tools for Windows
 - Python 3
 
 ```sh
@@ -58,7 +58,7 @@ python -I tools/build_emulator.py
 
 - `fetch_deps.py` downloads the Boost headers that dynarmic needs into `third_party/boost`.
 - `import_samsung_assets.py` copies the engines and voices into `app/src/main/jniLibs` and `app/src/main/assets`, which Git ignores. The `system` arguments are the extracted system partitions of each device's firmware.
-- `build_emulator.py` builds `libsmtemu.so` for arm64-v8a and x86_64.
+- `build_emulator.py` builds `libsmtemu.so` for arm64-v8a and x86_64. It takes the NDK from the SDK that `ANDROID_HOME` points to, and CMake and Ninja from PATH, or else from the newest Visual Studio installation with C++ CMake tools for Windows.
 
 To sign builds with your own key, put a `keystore.properties` in the project root (Git ignores it):
 
