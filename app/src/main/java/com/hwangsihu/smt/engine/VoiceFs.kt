@@ -12,11 +12,16 @@ internal object VoiceFs {
         nRedirect("lib$library.so")
     }.getOrDefault(false)
 
-    fun serve(files: VoiceFiles): String = serve(files, ::nMount, ::nUnmountAll)
+    fun serve(files: VoiceFiles): String = serve(files, ::nMount, ::nMountBytes, ::nUnmountAll)
 
-    fun serve(files: VoiceFiles, mount: (String, Int, Long, Long) -> Unit, unmountAll: () -> Unit): String {
+    fun serve(
+        files: VoiceFiles,
+        mount: (String, Int, Long, Long) -> Unit,
+        mountBytes: (String, ByteArray) -> Unit,
+        unmountAll: () -> Unit,
+    ): String {
         unmountAll()
-        files.forEachDescriptor(mount)
+        files.forEachFile(mount, mountBytes)
         return DIR
     }
 
@@ -25,6 +30,9 @@ internal object VoiceFs {
 
     @JvmStatic
     private external fun nMount(name: String, fd: Int, offset: Long, length: Long)
+
+    @JvmStatic
+    private external fun nMountBytes(name: String, data: ByteArray)
 
     @JvmStatic
     private external fun nUnmountAll()

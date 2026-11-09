@@ -733,6 +733,11 @@ JNIEXPORT jint JNICALL Java_com_hwangsihu_smt_engine_EmulatedEngine_nSamplingRat
 JNIEXPORT void JNICALL Java_com_hwangsihu_smt_engine_EmulatedEngine_nMount(JNIEnv* e, jobject, jstring name, jint fd, jlong offset, jlong length) {
     voicefs_mount(jstr(e, name).c_str(), fd, offset, length);
 }
+JNIEXPORT void JNICALL Java_com_hwangsihu_smt_engine_EmulatedEngine_nMountBytes(JNIEnv* e, jobject, jstring name, jbyteArray data) {
+    jsize n = e->GetArrayLength(data);
+    char* buffer = voicefs_mount_memory(jstr(e, name).c_str(), n);
+    if (buffer) e->GetByteArrayRegion(data, 0, n, reinterpret_cast<jbyte*>(buffer));
+}
 JNIEXPORT void JNICALL Java_com_hwangsihu_smt_engine_EmulatedEngine_nUnmountAll(JNIEnv*, jobject) { voicefs_clear(); }
 }
 #endif

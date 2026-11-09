@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.core.content.edit
 import java.util.Locale
+import java.util.zip.ZipFile
 
 enum class Engine { CLASSIC, HD, NEURAL }
 
@@ -17,13 +18,14 @@ sealed interface VoiceSource {
     // the S4 and Note 8 models).
     data class Asset(val dir: String, val sharedDirs: List<String> = emptyList()) : VoiceSource
     // Packs made for the 3.5 engine hand their files only to Samsung's own TTS ("Not allowed uid"), so
-    // readFromApk takes them straight from the pack's APK, where they sit uncompressed under assets/.
+    // readFromApk takes them straight from the pack's APK, where they sit uncompressed under assets/ (or apkDir).
     data class Pack(
         val packageName: String,
         val sourceDir: String,
         val nativeLibraryDir: String,
         val version: String = "",
         val readFromApk: Boolean = false,
+        val apkDir: String = "",
     ) : VoiceSource
 }
 
@@ -95,27 +97,43 @@ class VoiceRepository(private val context: Context) {
 
     private fun packs(): List<SmtVoice> {
         val pm = context.packageManager
-        return pm.queryIntentContentProviders(Intent(ACTION_CHECK_VOICE_DATA), 0)
+        val providers = pm.queryIntentContentProviders(Intent(ACTION_CHECK_VOICE_DATA), 0)
             .mapNotNull { it.providerInfo?.packageName }
             .filter { it.startsWith(PACK_PREFIX) }
             .distinct()
-            .flatMap { packageName ->
-                val app = pm.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
-                val meta = app.metaData ?: return@flatMap emptyList()
-                val (locale, variant) = parse(packageName.removePrefix(PACK_PREFIX)) ?: return@flatMap emptyList()
-                val label = pm.getApplicationLabel(app).toString()
-                val version = pm.getPackageInfo(packageName, 0).versionName.orEmpty()
-                val source = VoiceSource.Pack(packageName, app.sourceDir, app.nativeLibraryDir, version)
-                val multi = meta.getBoolean("voice.data.provider.multispeaker") || meta.getBoolean("voice.data.provider.multilingual")
-                when {
-                    meta.getBoolean("voice.data.provider.x") ->
-                        listOf(SmtVoice(name(locale, variant), locale, variant, label, Engine.HD, source))
-                    multi || meta.getString("voice.data.type") == "neural" -> neuralVoices(meta, locale, variant, label, source)
-                    meta.getBoolean("voice.data.provider") ->
-                        listOf(SmtVoice(name(locale, variant), locale, variant, label, Engine.CLASSIC, source))
-                    else -> emptyList()
-                }
-            }
+        return providers.flatMap { providerPack(pm, it) } + OLD_HD_PACKS.filter { it !in providers }.mapNotNull { oldHdPack(pm, it) }
+    }
+
+    private fun providerPack(pm: PackageManager, packageName: String): List<SmtVoice> {
+        val app = pm.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
+        val meta = app.metaData ?: return emptyList()
+        val (locale, variant) = parse(packageName.removePrefix(PACK_PREFIX)) ?: return emptyList()
+        val label = pm.getApplicationLabel(app).toString()
+        val version = pm.getPackageInfo(packageName, 0).versionName.orEmpty()
+        val source = VoiceSource.Pack(packageName, app.sourceDir, app.nativeLibraryDir, version)
+        val multi = meta.getBoolean("voice.data.provider.multispeaker") || meta.getBoolean("voice.data.provider.multilingual")
+        return when {
+            meta.getBoolean("voice.data.provider.x") ->
+                listOf(SmtVoice(name(locale, variant), locale, variant, label, Engine.HD, source))
+            multi || meta.getString("voice.data.type") == "neural" -> neuralVoices(meta, locale, variant, label, source)
+            meta.getBoolean("voice.data.provider") ->
+                listOf(SmtVoice(name(locale, variant), locale, variant, label, Engine.CLASSIC, source))
+            else -> emptyList()
+        }
+    }
+
+    // HD packs from before Samsung TTS 3.5 have no provider: their voice is a folder of data for the device engines,
+    // assets/DATA/smt_ko_KR_x01.am/, which the Note 4 engine reads (as the Note 4's own TTS did).
+    private fun oldHdPack(pm: PackageManager, packageName: String): SmtVoice? {
+        val app = runCatching { pm.getApplicationInfo(packageName, 0) }.getOrNull() ?: return null
+        val (locale, variant) = parse(packageName.removePrefix(PACK_PREFIX)) ?: return null
+        val folder = "assets/${OLD_HD_DIR}smt_${locale.language}_${locale.country}_$variant.am/"
+        val hasData = runCatching { ZipFile(app.sourceDir).use { zip -> zip.entries().asSequence().any { it.name.startsWith(folder) } } }
+            .getOrDefault(false)
+        if (!hasData) return null
+        val version = pm.getPackageInfo(packageName, 0).versionName.orEmpty()
+        val source = VoiceSource.Pack(packageName, app.sourceDir, app.nativeLibraryDir, version, readFromApk = true, apkDir = OLD_HD_DIR)
+        return SmtVoice(name(locale, variant), locale, variant, pm.getApplicationLabel(app).toString(), Engine.CLASSIC, source, DEVICE_N910)
     }
 
     // A multi-speaker pack (ko_kr_r00) lists its speakers in voice.data.supported_voices, such as l05 and g01; a
@@ -174,6 +192,9 @@ class VoiceRepository(private val context: Context) {
         private const val DEVICE_NOTE8 = "Note8"
         private const val ALIAS_SUFFIX = "-default"
         private const val PACK_PREFIX = "com.samsung.SMT.lang_"
+        // Listed in the manifest's <queries>, since they have no provider to be found by.
+        private val OLD_HD_PACKS = listOf("com.samsung.SMT.lang_ko_kr_x01")
+        private const val OLD_HD_DIR = "DATA/"
         private const val ASSET_ROOT = "voices"
         private val DEVICES = mapOf(
             DEVICE_NOTE2 to Device("Note 2"),

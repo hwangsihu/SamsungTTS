@@ -20,7 +20,7 @@ An Android text-to-speech engine that brings the voices of older Galaxy devices 
 
   The J5 also ships the Korean male voice, but it speaks exactly like the Note 4 one, so only that one is included.
 
-- **Installed voice packs** (`com.samsung.SMT.lang_*`): standard, unit-concatenation, neural (including multi-speaker and multilingual) and HD packs appear next to the embedded voices and are spoken the way Samsung's own TTS speaks them.
+- **Installed voice packs** (`com.samsung.SMT.lang_*`): standard, unit-concatenation, neural (including multi-speaker and multilingual) and HD packs appear next to the embedded voices and are spoken the way Samsung's own TTS speaks them. The older HD Korean packs (`lang_ko_kr_x01` from before Samsung TTS 3.5) run on the Note 4 engine, read straight from the pack.
 - **64-bit-only phones**: the 2014 engines are 32-bit ARM code. On devices that can no longer run 32-bit code, the app runs them in a built-in ARM emulator based on [dynarmic](https://github.com/azahar-emu/dynarmic).
 - **Phones, tablets, watches and TVs**, from one APK. In wide windows (tablets, foldables, Chromebooks, TVs) a language's voices open next to the language list. Wear OS watches get their own screens with rotary scrolling and swipe to go back, and Android TV lists the app in its launcher and drives it with the D-pad.
 - A default voice per language. Apps that only choose a language, such as TalkBack, follow a new choice without a restart.

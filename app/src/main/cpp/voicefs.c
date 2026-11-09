@@ -99,6 +99,15 @@ JNIEXPORT void JNICALL Java_com_hwangsihu_smt_engine_VoiceFs_nMount(JNIEnv* env,
     (*env)->ReleaseStringUTFChars(env, name, n);
 }
 
+JNIEXPORT void JNICALL Java_com_hwangsihu_smt_engine_VoiceFs_nMountBytes(JNIEnv* env, jclass cls, jstring name,
+                                                                         jbyteArray data) {
+    const char* n = (*env)->GetStringUTFChars(env, name, NULL);
+    jsize length = (*env)->GetArrayLength(env, data);
+    char* buffer = voicefs_mount_memory(n, length);
+    if (buffer) (*env)->GetByteArrayRegion(env, data, 0, length, (jbyte*) buffer);
+    (*env)->ReleaseStringUTFChars(env, name, n);
+}
+
 JNIEXPORT void JNICALL Java_com_hwangsihu_smt_engine_VoiceFs_nUnmountAll(JNIEnv* env, jclass cls) {
     voicefs_clear();
 }

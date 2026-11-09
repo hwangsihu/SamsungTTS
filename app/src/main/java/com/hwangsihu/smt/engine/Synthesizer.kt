@@ -17,6 +17,7 @@ import com.samsung.SMT.ref.VoiceDataInfo
 import java.io.File
 import java.io.InputStream
 import java.util.Locale
+import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import kotlin.math.abs
 
@@ -77,13 +78,24 @@ class VoiceFiles(private val context: Context, private val source: VoiceSource) 
     private val apkAssets: AssetManager? = (source as? VoiceSource.Pack)?.takeIf { it.readFromApk }
         ?.let { context.createPackageContext(it.packageName, 0).assets }
 
+    private val apkDir = (source as? VoiceSource.Pack)?.apkDir.orEmpty()
+
+    // Pack files the APK stores deflated, with their sizes: they cannot be handed out as descriptors, so they are
+    // read into memory.
+    private val compressed = mutableMapOf<String, Long>()
+
     val names: List<String> = when (source) {
         is VoiceSource.Asset -> assetDirs.keys.toList()
         is VoiceSource.Pack -> if (source.readFromApk) {
+            val prefix = APK_ASSETS + apkDir
             ZipFile(source.sourceDir).use { zip ->
-                zip.entries().asSequence().filter { !it.isDirectory }.map { it.name }
-                    .filter { it.startsWith(APK_ASSETS) && '/' !in it.substring(APK_ASSETS.length) }
-                    .map { it.removePrefix(APK_ASSETS) }.toList()
+                zip.entries().asSequence()
+                    .filter { !it.isDirectory && it.name.startsWith(prefix) }
+                    .filter { apkDir.isNotEmpty() || '/' !in it.name.substring(prefix.length) }
+                    .map { entry ->
+                        entry.name.removePrefix(prefix).also { if (entry.method == ZipEntry.DEFLATED) compressed[it] = entry.size }
+                    }
+                    .toList()
             }
         } else {
             context.contentResolver.query(base!!.toUri(), arrayOf("voice_data_lists"), null, null, null)
@@ -92,7 +104,7 @@ class VoiceFiles(private val context: Context, private val source: VoiceSource) 
     }
 
     // 2014-era HMM voices (Note 2) ship an 852-byte config; later ones are several KB.
-    fun isNote2Format(): Boolean = names.filter { it.endsWith(".cfg") }.any { name -> open(name).use { it.length < 1024 } }
+    fun isNote2Format(): Boolean = names.filter { it.endsWith(".cfg") }.any { name -> (compressed[name] ?: open(name).use { it.length }) < 1024 }
 
     fun describe(): Array<VoiceDataInfo> = names.map { name ->
         open(name).use { fd ->
@@ -103,16 +115,20 @@ class VoiceFiles(private val context: Context, private val source: VoiceSource) 
         }
     }.toTypedArray()
 
-    fun forEachDescriptor(action: (name: String, fd: Int, offset: Long, length: Long) -> Unit) {
-        for (name in names) open(name).use { action(name, it.parcelFileDescriptor.fd, it.startOffset, it.length) }
+    fun forEachFile(descriptor: (name: String, fd: Int, offset: Long, length: Long) -> Unit, bytes: (name: String, data: ByteArray) -> Unit) {
+        for (name in names) {
+            if (name in compressed) bytes(name, stream(name).use { it.readBytes() })
+            else open(name).use { descriptor(name, it.parcelFileDescriptor.fd, it.startOffset, it.length) }
+        }
     }
 
     fun copyTo(dir: File): File {
         dir.mkdirs()
         for (name in names) {
             val target = File(dir, name)
-            val length = open(name).use { it.length }
+            val length = compressed[name] ?: open(name).use { it.length }
             if (target.length() != length) {
+                target.parentFile!!.mkdirs()
                 stream(name).use { input -> target.outputStream().use { input.copyTo(it) } }
             }
         }
@@ -121,14 +137,14 @@ class VoiceFiles(private val context: Context, private val source: VoiceSource) 
 
     private fun open(name: String): AssetFileDescriptor = when (source) {
         is VoiceSource.Asset -> context.assets.openFd("${assetDirs.getValue(name)}/$name")
-        is VoiceSource.Pack -> apkAssets?.openFd(name)
+        is VoiceSource.Pack -> apkAssets?.openFd(apkDir + name)
             ?: context.contentResolver.openAssetFileDescriptor("$base/$name".toUri(), "r")
             ?: error("cannot open $name from ${source.packageName}")
     }
 
     private fun stream(name: String): InputStream = when (source) {
         is VoiceSource.Asset -> context.assets.open("${assetDirs.getValue(name)}/$name")
-        is VoiceSource.Pack -> apkAssets?.open(name)
+        is VoiceSource.Pack -> apkAssets?.open(apkDir + name)
             ?: context.contentResolver.openInputStream("$base/$name".toUri())
             ?: error("cannot read $name from ${source.packageName}")
     }
