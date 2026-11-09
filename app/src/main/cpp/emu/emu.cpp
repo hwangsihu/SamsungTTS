@@ -37,6 +37,7 @@ constexpr u32 JAVAVM_THUNKS = 0x00006840;
 constexpr u32 ENV_CELL = 0x00006a00;  // holds JNIENV_TABLE
 constexpr u32 VM_CELL = 0x00006a04;   // holds JAVAVM_TABLE
 constexpr u32 RETURN_TRAP = 0x00006b00;
+constexpr u32 BSEARCH_CODE = 0x00007000;
 constexpr u32 STACK_TOP = 0x17000000;
 
 // SVC comment ranges
@@ -232,7 +233,6 @@ void shim(Dynarmic::A32::Jit& jit, const std::string& name) {
     if (name == "strtod") { char* end = nullptr; double d = std::strtod(cstr(R[0]), &end); if (R[1]) w32(R[1], end ? R[0] + u32(end - cstr(R[0])) : R[0]); union { double d; u64 u; } c{d}; ret64(c.u); return; }
     if (name == "strtoul") { char* end = nullptr; unsigned long v = std::strtoul(cstr(R[0]), &end, int(R[2])); if (R[1]) w32(R[1], end ? R[0] + u32(end - cstr(R[0])) : R[0]); ret(u32(v)); return; }
     if (name == "atoi") { ret(u32(std::atoi(cstr(R[0])))); return; }
-    if (name == "bsearch") { ret(0); return; }  // not used on load path
     if (name == "__aeabi_idiv") { int a = int(R[0]), b = int(R[1]); ret(b ? u32(a / b) : 0); return; }
     if (name == "__aeabi_idivmod") { int a = int(R[0]), b = int(R[1]); R[0] = b ? u32(a / b) : 0; R[1] = b ? u32(a % b) : 0; return; }
     if (name == "__aeabi_uidivmod") { u32 a = R[0], b = R[1]; R[0] = b ? a / b : 0; R[1] = b ? a % b : 0; return; }
@@ -481,6 +481,7 @@ bool load_elf(const std::vector<u8>& f) {
     };
     auto resolve = [&](u32 symidx) -> u32 {
         std::string nm = name_of(symidx);
+        if (nm == "bsearch") return BSEARCH_CODE;
         if (is_func(symidx) || nm.rfind("__aeabi", 0) == 0 || nm.rfind("_Zn", 0) == 0 || nm.rfind("_Zd", 0) == 0)
             return import_thunk(nm);
         // data symbol
@@ -551,6 +552,13 @@ void setup_tables() {
     }
     w32(VM_CELL, JAVAVM_TABLE);
     w32(RETURN_TRAP, 0xEF000000 | SVC_RETURN);  // svc #return
+    // bsearch calls back into the engine's comparator, so it runs as ARM code (the BSD loop; Chinese text needs it).
+    static constexpr u32 bsearch_arm[] = {
+        0xE92D47F0, 0xE59D9020, 0xE1A04000, 0xE1A05001, 0xE1A06002, 0xE1A07003, 0xE3560000, 0x0A00000B,
+        0xE1A080A6, 0xE0285798, 0xE1A00004, 0xE1A01008, 0xE12FFF39, 0xE3500000, 0x01A00008, 0x0A000004,
+        0xC0885007, 0xC2466001, 0xE1A060A6, 0xEAFFFFF1, 0xE3A00000, 0xE8BD87F0,
+    };
+    for (u32 i = 0; i < sizeof bsearch_arm / 4; i++) w32(BSEARCH_CODE + i * 4, bsearch_arm[i]);
 }
 
 // reusable driver state
