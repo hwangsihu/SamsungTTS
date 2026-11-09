@@ -60,6 +60,17 @@ python -I tools/build_emulator.py
 - `import_samsung_assets.py` copies the engines and voices into `app/src/main/jniLibs` and `app/src/main/assets`, which Git ignores. The `system` arguments are the extracted system partitions of each device's firmware.
 - `build_emulator.py` builds `libsmtemu.so` for arm64-v8a and x86_64.
 
+To sign builds with your own key, put a `keystore.properties` in the project root (Git ignores it):
+
+```properties
+storeFile=release.jks
+storePassword=...
+keyAlias=...
+keyPassword=...
+```
+
+`storeFile` is relative to the project root. Debug and release builds are then both signed with that key, so either installs over the other. If the file is missing or a value is empty, Gradle warns, debug builds use the debug key and release builds are left unsigned.
+
 Install the APK, pick voices in the app, then choose Samsung TTS as the preferred engine in Android's text-to-speech settings; until then, the app offers to open those settings. Voice packs and HD voices are installed as separate APKs (packs that target an old SDK need `adb install --bypass-low-target-sdk-block`). Watches and TVs take the same APK over ADB; where a device's settings have no engine choice, set the engine from ADB:
 
 ```sh

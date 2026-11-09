@@ -1,6 +1,17 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+val keystoreProperties = providers.fileContents(rootProject.layout.projectDirectory.file("keystore.properties"))
+    .asText.orNull?.let { text -> Properties().apply { load(text.reader()) } }
+val missingKeystoreKeys = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+    .filter { keystoreProperties?.getProperty(it).isNullOrBlank() }
+if (missingKeystoreKeys.isNotEmpty()) {
+    val problem = if (keystoreProperties == null) "not found" else "has no ${missingKeystoreKeys.joinToString()}"
+    logger.warn("Warning: keystore.properties $problem; using default signing.")
 }
 
 android {
@@ -22,8 +33,23 @@ android {
         }
     }
 
+    signingConfigs {
+        if (keystoreProperties != null && missingKeystoreKeys.isEmpty()) {
+            create("keystore") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.findByName("keystore") ?: signingConfigs.getByName("debug")
+        }
         release {
+            signingConfig = signingConfigs.findByName("keystore")
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")

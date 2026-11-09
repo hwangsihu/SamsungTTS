@@ -18,6 +18,8 @@ python -I tools/build_emulator.py    # libsmtemu.so for arm64-v8a and x86_64, in
 adb install -r -t -g app/build/outputs/apk/debug/app-debug.apk
 ```
 
+Debug and release builds are both signed with the key that `keystore.properties` in the root names (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`; `storeFile` is relative to the root). The file is gitignored; if it is missing or a value is empty, Gradle warns, debug builds use the debug key and release builds are left unsigned.
+
 There are no unit tests. Changes are verified by synthesizing speech on a device (see Testing).
 
 ## Architecture
