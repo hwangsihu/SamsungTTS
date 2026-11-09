@@ -218,6 +218,7 @@ private fun Placeholder() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LanguageScreen(languages: List<Language>, defaults: Map<String, String>, open: String?, onOpen: (Language) -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -229,7 +230,10 @@ private fun LanguageScreen(languages: List<Language>, defaults: Map<String, Stri
             language.voices.first().locale.language,
         ).any { it.contains(query.trim(), ignoreCase = true) }
     }
-    Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
+    ) { padding ->
         Column(Modifier.padding(padding)) {
             OutlinedTextField(
                 value = query,
