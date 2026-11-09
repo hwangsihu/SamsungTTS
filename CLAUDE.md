@@ -11,12 +11,14 @@ An Android TTS engine (`com.hwangsihu.smt`) that runs Samsung's older TTS engine
 ```sh
 git submodule update --init --recursive
 python -I tools/fetch_deps.py        # Boost headers into third_party/boost (gitignored)
-python -I tools/import_samsung_assets.py <3.5 APK> <Note 8 lang_SMT> <Note 2 system> <SM-P600 system> <SHV-E300L system> <SM-J500N0 system> <SM-N910L system>
+python -I tools/import_samsung_assets.py <folder>  # the 3.5 APK and the six firmwares README lists
 python -I tools/build_emulator.py    # libsmtemu.so for arm64-v8a and x86_64, into jniLibs
 ./gradlew assembleDebug
 ./gradlew build                      # also runs lint; lint errors fail the build
 adb install -r -t -g app/build/outputs/apk/debug/app-debug.apk
 ```
+
+`import_samsung_assets.py` finds the APK and the firmwares (SamFW zips, unpacked folders or AP files) anywhere under the folder, telling them apart by the build in the AP file name, and reads the system images itself in pure Python: tar, LZ4 frames of independent blocks (the Note 8), Android sparse images (most with Samsung's 32- and 16-byte headers) and ext4. Only a system image inside a zip is copied out first, to a temporary folder.
 
 Debug and release builds are both signed with the key that `keystore.properties` in the root names (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`; `storeFile` is relative to the root). The file is gitignored; if it is missing or a value is empty, Gradle warns, debug builds use the debug key and release builds are left unsigned.
 
