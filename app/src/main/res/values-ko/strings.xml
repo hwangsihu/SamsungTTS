@@ -8,4 +8,7 @@
     <string name="text_hint">읽을 문장</string>
     <string name="play">재생</string>
     <string name="choose_language">언어를 선택하세요</string>
+    <string name="not_preferred_engine">삼성 TTS가 기본 엔진이 아닙니다</string>
+    <string name="not_preferred_engine_detail">TalkBack 등 다른 앱에서 이 음성을 쓰려면 텍스트 음성 변환 설정에서 삼성 TTS를 기본 엔진으로 선택하세요.</string>
+    <string name="open_tts_settings">설정 열기</string>
 </resources>

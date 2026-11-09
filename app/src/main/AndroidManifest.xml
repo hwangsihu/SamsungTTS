@@ -16,6 +16,9 @@
             <action android:name="com.samsung.SMT.action.CHECK_VOICE_DATA" />
         </intent>
         <package android:name="com.samsung.SMT.lang_ko_kr_x01" />
+        <intent>
+            <action android:name="com.android.settings.TTS_SETTINGS" />
+        </intent>
     </queries>
 
     <application

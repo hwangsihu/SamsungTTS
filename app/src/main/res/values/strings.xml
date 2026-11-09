@@ -9,4 +9,7 @@
     <string name="text_hint">Text to speak</string>
     <string name="play">Play</string>
     <string name="choose_language">Choose a language</string>
+    <string name="not_preferred_engine">Samsung TTS isn\'t the preferred engine</string>
+    <string name="not_preferred_engine_detail">For TalkBack and other apps to use these voices, choose Samsung TTS as the preferred engine in the text-to-speech settings.</string>
+    <string name="open_tts_settings">Open settings</string>
 </resources>

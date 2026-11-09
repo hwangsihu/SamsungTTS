@@ -39,6 +39,8 @@ android {
     }
     androidResources {
         noCompress += listOf("lng", "am", "cfg", "dt", "qs", "cart", "pb")
+        generateLocaleConfig = true
+        localeFilters += listOf("en", "ko")
     }
     externalNativeBuild {
         ndkBuild {

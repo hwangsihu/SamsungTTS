@@ -1,5 +1,6 @@
 package com.hwangsihu.smt
 
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -30,6 +31,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -97,6 +100,9 @@ class MainActivity : ComponentActivity() {
     private val voices = mutableStateOf(emptyList<SmtVoice>())
     private val defaults = mutableStateOf(emptyMap<String, String>())
 
+    // The text-to-speech settings, while this is not the preferred engine and the device has those settings.
+    private val ttsSettings = mutableStateOf<Intent?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -114,7 +120,10 @@ class MainActivity : ComponentActivity() {
             } else {
                 val television = device == Configuration.UI_MODE_TYPE_TELEVISION
                 SamsungTTSTheme(darkTheme = television || isSystemInDarkTheme()) {
-                    App(languages, defaults.value, backStack, television, onSelect = ::select, onPlay = ::speak)
+                    App(
+                        languages, defaults.value, backStack, television, onSelect = ::select, onPlay = ::speak,
+                        onOpenTtsSettings = ttsSettings.value?.let { intent -> { startActivity(intent) } },
+                    )
                 }
             }
         }
@@ -125,6 +134,9 @@ class MainActivity : ComponentActivity() {
         repository.invalidate()
         voices.value = repository.voices()
         defaults.value = repository.defaults()
+        ttsSettings.value = Intent(ACTION_TTS_SETTINGS).takeIf {
+            tts?.defaultEngine != packageName && it.resolveActivity(packageManager) != null
+        }
     }
 
     override fun onDestroy() {
@@ -169,6 +181,7 @@ private fun App(
     television: Boolean,
     onSelect: (SmtVoice) -> Unit,
     onPlay: (SmtVoice, String) -> Unit,
+    onOpenTtsSettings: (() -> Unit)?,
 ) {
     val directive = calculatePaneScaffoldDirective(currentWindowAdaptiveInfoV2())
     val twoPane = directive.maxHorizontalPartitions > 1
@@ -183,7 +196,7 @@ private fun App(
             sceneStrategies = listOf(rememberListDetailSceneStrategy(directive = directive)),
             entryProvider = entryProvider {
                 entry<Screen.Languages>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = { Placeholder() })) {
-                    LanguageScreen(languages, defaults, open) { language ->
+                    LanguageScreen(languages, defaults, open, onOpenTtsSettings) { language ->
                         keyboard?.hide()
                         backStack.open(language)
                     }
@@ -205,10 +218,38 @@ private fun App(
 
 private val TV_OVERSCAN = PaddingValues(horizontal = 48.dp, vertical = 27.dp)
 
+private const val ACTION_TTS_SETTINGS = "com.android.settings.TTS_SETTINGS"
+
 @Composable
 private fun InteractionSource.focusColor(): Color {
     val focused by collectIsFocusedAsState()
     return if (focused) MaterialTheme.colorScheme.primary else Color.Transparent
+}
+
+@Composable
+private fun PreferredEngineCard(onOpenTtsSettings: () -> Unit) {
+    val button = remember { MutableInteractionSource() }
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 16.dp, end = 16.dp),
+    ) {
+        Column(Modifier.padding(start = 16.dp, top = 16.dp, end = 8.dp, bottom = 8.dp)) {
+            Text(stringResource(R.string.not_preferred_engine), style = MaterialTheme.typography.titleSmall)
+            Text(
+                stringResource(R.string.not_preferred_engine_detail),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 4.dp, end = 8.dp),
+            )
+            TextButton(
+                onClick = onOpenTtsSettings,
+                modifier = Modifier.align(Alignment.End),
+                border = BorderStroke(2.dp, button.focusColor()),
+                interactionSource = button,
+            ) {
+                Text(stringResource(R.string.open_tts_settings))
+            }
+        }
+    }
 }
 
 @Composable
@@ -220,7 +261,13 @@ private fun Placeholder() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LanguageScreen(languages: List<Language>, defaults: Map<String, String>, open: String?, onOpen: (Language) -> Unit) {
+private fun LanguageScreen(
+    languages: List<Language>,
+    defaults: Map<String, String>,
+    open: String?,
+    onOpenTtsSettings: (() -> Unit)?,
+    onOpen: (Language) -> Unit,
+) {
     var query by rememberSaveable { mutableStateOf("") }
     val shown = languages.filter { language ->
         query.isBlank() || listOf(
@@ -235,6 +282,7 @@ private fun LanguageScreen(languages: List<Language>, defaults: Map<String, Stri
         topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
     ) { padding ->
         Column(Modifier.padding(padding)) {
+            if (onOpenTtsSettings != null) PreferredEngineCard(onOpenTtsSettings)
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
