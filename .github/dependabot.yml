@@ -1,5 +1,13 @@
 version: 2
 updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: gitsubmodule
+    directory: /
+    schedule:
+      interval: weekly
   - package-ecosystem: gradle
     directory: /
     schedule:
@@ -8,11 +16,3 @@ updates:
       androidx:
         patterns:
           - "androidx.*"
-  - package-ecosystem: gitsubmodule
-    directory: /
-    schedule:
-      interval: weekly
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
