@@ -17,14 +17,17 @@ import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumnScope
 import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
+import androidx.wear.compose.material3.AlertDialogContent
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.Button
+import androidx.wear.compose.material3.FilledTonalButton
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.SplitRadioButton
 import androidx.wear.compose.material3.SurfaceTransformation
+import androidx.wear.compose.material3.SwitchButton
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.dynamicColorScheme
 import androidx.wear.compose.material3.lazy.TransformationSpec
@@ -38,12 +41,13 @@ internal fun WatchApp(
     languages: List<Language>,
     defaults: Map<String, String>,
     backStack: SnapshotStateList<Screen>,
+    telemetry: TelemetryControls?,
     onSelect: (SmtVoice) -> Unit,
     onPlay: (SmtVoice) -> Unit,
 ) {
     MaterialTheme(colorScheme = dynamicColorScheme(LocalContext.current) ?: MaterialTheme.colorScheme) {
         AppScaffold {
-            NavDisplay(
+            if (telemetry != null && telemetry.consent == null) WatchConsent(telemetry.onConsent) else NavDisplay(
                 backStack = backStack,
                 sceneStrategies = listOf(rememberSwipeDismissableSceneStrategy()),
                 entryProvider = entryProvider {
@@ -58,6 +62,27 @@ internal fun WatchApp(
                                     transformation = SurfaceTransformation(spec),
                                     label = { Text(language.name) },
                                 )
+                            }
+                            if (telemetry != null) {
+                                item {
+                                    SwitchButton(
+                                        checked = telemetry.consent == true,
+                                        onCheckedChange = telemetry.onConsent,
+                                        modifier = Modifier.fillMaxWidth().transformedHeight(this, spec),
+                                        transformation = SurfaceTransformation(spec),
+                                        secondaryLabel = { Text(stringResource(R.string.telemetry_detail), maxLines = Int.MAX_VALUE) },
+                                        label = { Text(stringResource(R.string.telemetry), maxLines = Int.MAX_VALUE) },
+                                    )
+                                }
+                                item {
+                                    FilledTonalButton(
+                                        onClick = telemetry.onReset,
+                                        modifier = Modifier.fillMaxWidth().transformedHeight(this, spec),
+                                        transformation = SurfaceTransformation(spec),
+                                        secondaryLabel = { Text(stringResource(R.string.reset_ids_detail), maxLines = Int.MAX_VALUE) },
+                                        label = { Text(stringResource(R.string.reset_ids)) },
+                                    )
+                                }
                             }
                         }
                     }
@@ -86,6 +111,33 @@ internal fun WatchApp(
                         }
                     }
                 },
+            )
+        }
+    }
+}
+
+@Composable
+private fun WatchConsent(onAnswer: (Boolean) -> Unit) {
+    val spec = rememberTransformationSpec()
+    AlertDialogContent(
+        title = { Text(stringResource(R.string.consent_title)) },
+        transformationSpec = spec,
+        text = { Text(stringResource(R.string.consent_body)) },
+    ) {
+        item {
+            Button(
+                onClick = { onAnswer(true) },
+                modifier = Modifier.fillMaxWidth().transformedHeight(this, spec),
+                transformation = SurfaceTransformation(spec),
+                label = { Text(stringResource(R.string.allow)) },
+            )
+        }
+        item {
+            FilledTonalButton(
+                onClick = { onAnswer(false) },
+                modifier = Modifier.fillMaxWidth().transformedHeight(this, spec),
+                transformation = SurfaceTransformation(spec),
+                label = { Text(stringResource(R.string.dont_allow)) },
             )
         }
     }

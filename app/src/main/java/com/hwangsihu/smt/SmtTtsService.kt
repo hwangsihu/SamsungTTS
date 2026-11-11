@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioFormat
+import android.os.SystemClock
 import android.speech.tts.SynthesisCallback
 import android.speech.tts.SynthesisRequest
 import android.speech.tts.TextToSpeech
@@ -23,6 +24,7 @@ import kotlin.math.min
 class SmtTtsService : TextToSpeechService() {
 
     private lateinit var repository: VoiceRepository
+    private lateinit var telemetry: Telemetry
     private var loaded: Pair<String, Synthesizer>? = null
 
     @Volatile
@@ -35,6 +37,7 @@ class SmtTtsService : TextToSpeechService() {
 
     override fun onCreate() {
         repository = VoiceRepository(this)
+        telemetry = Telemetry(this)
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED)
             addAction(Intent.ACTION_PACKAGE_REMOVED)
@@ -98,6 +101,7 @@ class SmtTtsService : TextToSpeechService() {
             synthesizerFor(voice)
         } catch (e: Throwable) {  // a missing or broken engine must not crash the TTS service
             Log.e(TAG, "cannot load ${voice.name}", e)
+            telemetry.voiceFailed(voice, e)
             callback.error(TextToSpeech.ERROR_SYNTHESIS)
             return
         }
@@ -125,7 +129,12 @@ class SmtTtsService : TextToSpeechService() {
             synthesizer.release()
         }
         loaded = null
-        return Synthesizer.load(this, voice).also { loaded = voice.name to it }
+        telemetry.loadingVoice(voice)
+        val start = SystemClock.elapsedRealtime()
+        return Synthesizer.load(this, voice).also {
+            loaded = voice.name to it
+            telemetry.voiceLoaded(voice, it, SystemClock.elapsedRealtime() - start)
+        }
     }
 
     private fun SmtVoice.toVoice() = Voice(

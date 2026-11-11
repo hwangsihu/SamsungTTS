@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -29,11 +30,16 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -42,6 +48,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -70,6 +77,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import com.hwangsihu.smt.ui.theme.SamsungTTSTheme
@@ -90,12 +98,16 @@ internal fun SnapshotStateList<Screen>.open(language: Language) {
     add(Screen.Voices(language.iso3))
 }
 
+internal class TelemetryControls(val consent: Boolean?, val onConsent: (Boolean) -> Unit, val onReset: () -> Unit)
+
 class MainActivity : ComponentActivity() {
 
     private lateinit var repository: VoiceRepository
+    private lateinit var telemetry: Telemetry
     private var tts: TextToSpeech? = null
     private val voices = mutableStateOf(emptyList<SmtVoice>())
     private val defaults = mutableStateOf(emptyMap<String, String>())
+    private val consent = mutableStateOf<Boolean?>(null)
 
     // The text-to-speech settings, while this is not the preferred engine and the device has those settings.
     private val ttsSettings = mutableStateOf<Intent?>(null)
@@ -104,21 +116,26 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         repository = VoiceRepository(this)
+        telemetry = Telemetry(this)
+        consent.value = telemetry.consent
         tts = TextToSpeech(this, {}, packageName)
         val device = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK
         setContent {
+            val controls = if (telemetry.available) TelemetryControls(consent.value, ::answer, ::resetIds) else null
             val languages = remember(voices.value) { languages(voices.value) }
             val backStack = rememberBackStack()
+            val top = backStack.last()
+            LaunchedEffect(top) { telemetry.screen(top) }
             LaunchedEffect(languages) {
                 if (languages.isNotEmpty()) backStack.removeAll { it is Screen.Voices && languages.none { language -> language.iso3 == it.iso3 } }
             }
             if (device == Configuration.UI_MODE_TYPE_WATCH && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
-                WatchApp(languages, defaults.value, backStack, onSelect = ::select, onPlay = ::speak)
+                WatchApp(languages, defaults.value, backStack, controls, onSelect = ::select, onPlay = ::speak)
             } else {
                 val television = device == Configuration.UI_MODE_TYPE_TELEVISION
                 SamsungTTSTheme(darkTheme = television || isSystemInDarkTheme()) {
                     App(
-                        languages, defaults.value, backStack, television, onSelect = ::select, onPlay = ::speak,
+                        languages, defaults.value, backStack, television, controls, onSelect = ::select, onPlay = ::speak,
                         onOpenTtsSettings = ttsSettings.value?.let { intent -> { startActivity(intent) } },
                     )
                 }
@@ -131,9 +148,9 @@ class MainActivity : ComponentActivity() {
         repository.invalidate()
         voices.value = repository.voices()
         defaults.value = repository.defaults()
-        ttsSettings.value = Intent(ACTION_TTS_SETTINGS).takeIf {
-            tts?.defaultEngine != packageName && it.resolveActivity(packageManager) != null
-        }
+        val preferred = tts?.defaultEngine == packageName
+        telemetry.preferredEngine(preferred)
+        ttsSettings.value = Intent(ACTION_TTS_SETTINGS).takeIf { !preferred && it.resolveActivity(packageManager) != null }
     }
 
     override fun onDestroy() {
@@ -141,13 +158,25 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    private fun answer(granted: Boolean) {
+        telemetry.setConsent(granted)
+        consent.value = granted
+        if (granted) telemetry.preferredEngine(tts?.defaultEngine == packageName)
+    }
+
+    private fun resetIds() = telemetry.resetIds { reset ->
+        Toast.makeText(this, if (reset) R.string.reset_ids_done else R.string.reset_ids_failed, Toast.LENGTH_SHORT).show()
+    }
+
     private fun select(voice: SmtVoice) {
+        if (defaults.value[voice.locale.isO3Language] != voice.name) telemetry.selectVoice(voice)
         repository.setDefault(voice)
         defaults.value = repository.defaults()
     }
 
     private fun speak(voice: SmtVoice) {
         val engine = tts ?: return
+        telemetry.playSample(voice)
         engine.voices?.firstOrNull { it.name == voice.name }?.let { engine.voice = it }
         engine.speak(SampleText.forLanguage(voice.locale.isO3Language), TextToSpeech.QUEUE_FLUSH, null, voice.name)
     }
@@ -176,6 +205,7 @@ private fun App(
     defaults: Map<String, String>,
     backStack: SnapshotStateList<Screen>,
     television: Boolean,
+    telemetry: TelemetryControls?,
     onSelect: (SmtVoice) -> Unit,
     onPlay: (SmtVoice) -> Unit,
     onOpenTtsSettings: (() -> Unit)?,
@@ -192,7 +222,7 @@ private fun App(
             sceneStrategies = listOf(rememberListDetailSceneStrategy(directive = directive)),
             entryProvider = entryProvider {
                 entry<Screen.Languages>(metadata = ListDetailSceneStrategy.listPane(detailPlaceholder = { Placeholder() })) {
-                    LanguageScreen(languages, defaults, open, onOpenTtsSettings) { language -> backStack.open(language) }
+                    LanguageScreen(languages, defaults, open, telemetry, onOpenTtsSettings) { language -> backStack.open(language) }
                 }
                 entry<Screen.Voices>(metadata = ListDetailSceneStrategy.detailPane()) { key ->
                     languages.firstOrNull { it.iso3 == key.iso3 }?.let { language ->
@@ -206,6 +236,7 @@ private fun App(
                 }
             },
         )
+        if (telemetry != null && telemetry.consent == null) ConsentDialog(telemetry.onConsent)
     }
 }
 
@@ -246,6 +277,54 @@ private fun PreferredEngineCard(onOpenTtsSettings: () -> Unit) {
 }
 
 @Composable
+private fun ConsentDialog(onAnswer: (Boolean) -> Unit) {
+    val allow = remember { MutableInteractionSource() }
+    val dontAllow = remember { MutableInteractionSource() }
+    AlertDialog(
+        onDismissRequest = {},
+        confirmButton = {
+            TextButton(onClick = { onAnswer(true) }, border = BorderStroke(2.dp, allow.focusColor()), interactionSource = allow) {
+                Text(stringResource(R.string.allow))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { onAnswer(false) }, border = BorderStroke(2.dp, dontAllow.focusColor()), interactionSource = dontAllow) {
+                Text(stringResource(R.string.dont_allow))
+            }
+        },
+        title = { Text(stringResource(R.string.consent_title)) },
+        text = { Text(stringResource(R.string.consent_body), Modifier.verticalScroll(rememberScrollState())) },
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+    )
+}
+
+@Composable
+private fun TelemetrySwitch(telemetry: TelemetryControls) {
+    val checked = telemetry.consent == true
+    val interaction = remember { MutableInteractionSource() }
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.telemetry)) },
+        supportingContent = { Text(stringResource(R.string.telemetry_detail)) },
+        trailingContent = { Switch(checked = checked, onCheckedChange = null) },
+        modifier = Modifier
+            .border(2.dp, interaction.focusColor())
+            .toggleable(checked, interaction, ripple(), role = Role.Switch, onValueChange = telemetry.onConsent),
+    )
+}
+
+@Composable
+private fun ResetIds(onReset: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.reset_ids)) },
+        supportingContent = { Text(stringResource(R.string.reset_ids_detail)) },
+        modifier = Modifier
+            .border(2.dp, interaction.focusColor())
+            .clickable(interaction, ripple(), role = Role.Button, onClick = onReset),
+    )
+}
+
+@Composable
 private fun Placeholder() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(stringResource(R.string.choose_language), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -258,6 +337,7 @@ private fun LanguageScreen(
     languages: List<Language>,
     defaults: Map<String, String>,
     open: String?,
+    telemetry: TelemetryControls?,
     onOpenTtsSettings: (() -> Unit)?,
     onOpen: (Language) -> Unit,
 ) {
@@ -290,6 +370,13 @@ private fun LanguageScreen(
                             .border(2.dp, interaction.focusColor())
                             .clickable(interaction, ripple()) { onOpen(language) },
                     )
+                }
+                if (telemetry != null) {
+                    item(key = "telemetry") {
+                        HorizontalDivider()
+                        TelemetrySwitch(telemetry)
+                        ResetIds(telemetry.onReset)
+                    }
                 }
             }
         }

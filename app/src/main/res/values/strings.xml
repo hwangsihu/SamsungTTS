@@ -10,4 +10,14 @@
     <string name="not_preferred_engine">Samsung TTS isn\'t the preferred engine</string>
     <string name="not_preferred_engine_detail">For TalkBack and other apps to use these voices, choose Samsung TTS as the preferred engine in the text-to-speech settings.</string>
     <string name="open_tts_settings">Open settings</string>
+    <string name="consent_title">Send usage statistics and error reports?</string>
+    <string name="consent_body">To help improve the app, Samsung TTS can send usage statistics and error reports to Google Firebase.\n• Usage statistics: the screens you open, the voices you choose or play, and whether a voice loaded and how long it took\n• Error reports: what went wrong when the app crashed or couldn\'t load a voice, and which voice was in use\nBoth include your device model, Android version and approximate region. The text being spoken is never sent.\n\nYou can change this at any time at the bottom of the language list.</string>
+    <string name="allow">Allow</string>
+    <string name="dont_allow">Don\'t allow</string>
+    <string name="telemetry">Send usage statistics and error reports</string>
+    <string name="telemetry_detail">The text being spoken is never sent</string>
+    <string name="reset_ids">Reset statistics ID</string>
+    <string name="reset_ids_detail">Starts a new ID so later data isn\'t linked to earlier data. Data already sent isn\'t deleted.</string>
+    <string name="reset_ids_done">Statistics ID reset</string>
+    <string name="reset_ids_failed">Couldn\'t reset the statistics ID. Check your internet connection.</string>
 </resources>
