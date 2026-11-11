@@ -110,6 +110,5 @@ dependencies {
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.crashlytics.ndk)
-    implementation(libs.firebase.installations)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

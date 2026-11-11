@@ -7,7 +7,6 @@ import androidx.core.content.edit
 import com.google.firebase.FirebaseApp
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
-import com.google.firebase.installations.FirebaseInstallations
 import com.hwangsihu.smt.engine.ClassicSynthesizer
 import com.hwangsihu.smt.engine.HdSynthesizer
 import com.hwangsihu.smt.engine.LegacySynthesizer
@@ -30,12 +29,6 @@ internal class Telemetry(context: Context) {
         crashlytics.deleteUnsentReports()
         crashlytics.setCrashlyticsCollectionEnabled(granted)
         analytics.setAnalyticsCollectionEnabled(granted)
-    }
-
-    fun resetIds(onDone: (Boolean) -> Unit) {
-        val analytics = analytics ?: return onDone(false)
-        analytics.resetAnalyticsData()
-        FirebaseInstallations.getInstance().delete().addOnCompleteListener { onDone(it.isSuccessful) }
     }
 
     fun screen(screen: Screen) {

@@ -15,8 +15,4 @@
     <string name="dont_allow">허용 안 함</string>
     <string name="telemetry">사용 통계와 오류 보고 보내기</string>
     <string name="telemetry_detail">읽어 주는 텍스트는 보내지 않습니다</string>
-    <string name="reset_ids">통계 ID 초기화</string>
-    <string name="reset_ids_detail">새 ID를 만들어 이후 데이터를 이전 데이터와 분리합니다. 이미 보낸 데이터는 지워지지 않습니다.</string>
-    <string name="reset_ids_done">통계 ID를 초기화했습니다</string>
-    <string name="reset_ids_failed">통계 ID를 초기화하지 못했습니다. 인터넷 연결을 확인하세요.</string>
 </resources>

@@ -16,8 +16,4 @@
     <string name="dont_allow">Don\'t allow</string>
     <string name="telemetry">Send usage statistics and error reports</string>
     <string name="telemetry_detail">The text being spoken is never sent</string>
-    <string name="reset_ids">Reset statistics ID</string>
-    <string name="reset_ids_detail">Starts a new ID so later data isn\'t linked to earlier data. Data already sent isn\'t deleted.</string>
-    <string name="reset_ids_done">Statistics ID reset</string>
-    <string name="reset_ids_failed">Couldn\'t reset the statistics ID. Check your internet connection.</string>
 </resources>

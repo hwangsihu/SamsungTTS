@@ -5,7 +5,6 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -98,7 +97,7 @@ internal fun SnapshotStateList<Screen>.open(language: Language) {
     add(Screen.Voices(language.iso3))
 }
 
-internal class TelemetryControls(val consent: Boolean?, val onConsent: (Boolean) -> Unit, val onReset: () -> Unit)
+internal class TelemetryControls(val consent: Boolean?, val onConsent: (Boolean) -> Unit)
 
 class MainActivity : ComponentActivity() {
 
@@ -121,7 +120,7 @@ class MainActivity : ComponentActivity() {
         tts = TextToSpeech(this, {}, packageName)
         val device = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK
         setContent {
-            val controls = if (telemetry.available) TelemetryControls(consent.value, ::answer, ::resetIds) else null
+            val controls = if (telemetry.available) TelemetryControls(consent.value, ::answer) else null
             val languages = remember(voices.value) { languages(voices.value) }
             val backStack = rememberBackStack()
             val top = backStack.last()
@@ -162,10 +161,6 @@ class MainActivity : ComponentActivity() {
         telemetry.setConsent(granted)
         consent.value = granted
         if (granted) telemetry.preferredEngine(tts?.defaultEngine == packageName)
-    }
-
-    private fun resetIds() = telemetry.resetIds { reset ->
-        Toast.makeText(this, if (reset) R.string.reset_ids_done else R.string.reset_ids_failed, Toast.LENGTH_SHORT).show()
     }
 
     private fun select(voice: SmtVoice) {
@@ -313,18 +308,6 @@ private fun TelemetrySwitch(telemetry: TelemetryControls) {
 }
 
 @Composable
-private fun ResetIds(onReset: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    ListItem(
-        headlineContent = { Text(stringResource(R.string.reset_ids)) },
-        supportingContent = { Text(stringResource(R.string.reset_ids_detail)) },
-        modifier = Modifier
-            .border(2.dp, interaction.focusColor())
-            .clickable(interaction, ripple(), role = Role.Button, onClick = onReset),
-    )
-}
-
-@Composable
 private fun Placeholder() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(stringResource(R.string.choose_language), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -375,7 +358,6 @@ private fun LanguageScreen(
                     item(key = "telemetry") {
                         HorizontalDivider()
                         TelemetrySwitch(telemetry)
-                        ResetIds(telemetry.onReset)
                     }
                 }
             }

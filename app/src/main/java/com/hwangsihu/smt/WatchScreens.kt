@@ -74,15 +74,6 @@ internal fun WatchApp(
                                         label = { Text(stringResource(R.string.telemetry), maxLines = Int.MAX_VALUE) },
                                     )
                                 }
-                                item {
-                                    FilledTonalButton(
-                                        onClick = telemetry.onReset,
-                                        modifier = Modifier.fillMaxWidth().transformedHeight(this, spec),
-                                        transformation = SurfaceTransformation(spec),
-                                        secondaryLabel = { Text(stringResource(R.string.reset_ids_detail), maxLines = Int.MAX_VALUE) },
-                                        label = { Text(stringResource(R.string.reset_ids)) },
-                                    )
-                                }
                             }
                         }
                     }
