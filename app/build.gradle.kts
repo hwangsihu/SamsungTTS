@@ -1,9 +1,15 @@
+import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
+import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
 import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
 }
+
+val hasGoogleServices = layout.projectDirectory.file("google-services.json").asFile.exists()
 
 val keystoreProperties = providers.fileContents(rootProject.layout.projectDirectory.file("keystore.properties"))
     .asText.orNull?.let { text -> Properties().apply { load(text.reader()) } }
@@ -47,9 +53,14 @@ android {
     buildTypes {
         debug {
             signingConfig = signingConfigs.findByName("keystore") ?: signingConfigs.getByName("debug")
+            configure<CrashlyticsExtension> { nativeSymbolUploadEnabled = true }
         }
         release {
             signingConfig = signingConfigs.findByName("keystore")
+            configure<CrashlyticsExtension> {
+                nativeSymbolUploadEnabled = true
+                mappingFileUploadEnabled = hasGoogleServices
+            }
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
@@ -80,6 +91,10 @@ android {
     }
 }
 
+googleServices {
+    missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN
+}
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
@@ -91,5 +106,10 @@ dependencies {
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.androidx.wear.compose.material3)
     implementation(libs.androidx.wear.compose.navigation3)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.crashlytics.ndk)
+    implementation(libs.firebase.installations)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
